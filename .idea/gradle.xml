@@ -10,6 +10,21 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/cm08statscore" />
+            <option value="$PROJECT_DIR$/distanceleaderboard" />
+            <option value="$PROJECT_DIR$/playtimeleaderboard" />
+          </set>
+        </option>
+        <option name="resolveExternalAnnotations" value="true" />
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="distributionType" value="WRAPPED" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$/distanceleaderboard" />
+        <option name="gradleJvm" value="#JAVA_HOME" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/cm08statscore" />
+            <option value="$PROJECT_DIR$/distanceleaderboard" />
             <option value="$PROJECT_DIR$/playtimeleaderboard" />
           </set>
         </option>

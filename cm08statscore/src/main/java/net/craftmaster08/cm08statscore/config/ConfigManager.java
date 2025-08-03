@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import net.craftmaster08.cm08statscore.playtime.DailyPlaytimeTracker;
+import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.minecraft.ChatFormatting;
 import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
@@ -14,9 +14,6 @@ import java.io.*;
 import java.nio.file.Path;
 import java.util.*;
 
-/**
- * Manages the StatsCore configuration, including username colors and blacklisted players.
- */
 public class ConfigManager {
     private static final Logger LOGGER = LogManager.getLogger(ConfigManager.class);
     public static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("statscore_config.json");
@@ -26,12 +23,12 @@ public class ConfigManager {
     public Map<String, ChatFormatting> usernameColors;
     public Set<String> blacklistedPlayers;
     public String dailyResetTime;
-    public final DailyPlaytimeTracker dailyPlaytimeTracker;
+    public final DailyStatsTracker dailyStatsTracker;
 
-    public ConfigManager(DailyPlaytimeTracker dailyPlaytimeTracker) {
-        this.dailyPlaytimeTracker = dailyPlaytimeTracker;
-        if (dailyPlaytimeTracker == null) {
-            LOGGER.warn("DailyPlaytimeTracker is null; daily playtime features will be disabled");
+    public ConfigManager(DailyStatsTracker dailyPlaytimeTracker) {
+        this.dailyStatsTracker = dailyPlaytimeTracker;
+        if (dailyStatsTracker == null) {
+            LOGGER.warn("DailyStatsTracker is null; daily stats features will be disabled");
         }
         this.usernameColors = Map.of();
         this.blacklistedPlayers = Set.of();
@@ -39,27 +36,14 @@ public class ConfigManager {
         loadConfig();
     }
 
-    /**
-     * Gets the map of username colors.
-     *
-     * @return An immutable map of usernames to their colors.
-     */
     public Map<String, ChatFormatting> getUsernameColors() {
         return usernameColors;
     }
 
-    /**
-     * Gets the set of blacklisted players.
-     *
-     * @return An immutable set of blacklisted player names.
-     */
     public Set<String> getBlacklistedPlayers() {
         return blacklistedPlayers;
     }
 
-    /**
-     * Loads the configuration, handling old playtimeleaderboard_config.json if present and no new config exists.
-     */
     public void loadConfig() {
         File configFile = CONFIG_PATH.toFile();
         File oldConfigFile = OLD_CONFIG_PATH.toFile();
@@ -85,20 +69,13 @@ public class ConfigManager {
         }
 
         ConfigLoader.load(configFile, this);
-        if (dailyPlaytimeTracker != null) {
-            dailyPlaytimeTracker.setDailyResetTime(dailyResetTime);
+        if (dailyStatsTracker != null) {
+            dailyStatsTracker.setDailyResetTime(dailyResetTime);
         } else {
-            LOGGER.warn("Skipping dailyPlaytimeTracker.setDailyResetTime due to null tracker");
+            LOGGER.warn("Skipping daily reset time due to null tracker");
         }
     }
 
-    /**
-     * Migrates the old playtimeleaderboard_config.json to the new statscore_config.json format.
-     *
-     * @param oldConfigFile The old config file.
-     * @param newConfigFile The new config file.
-     * @return true if migration was successful, false otherwise.
-     */
     private boolean migrateOldConfig(File oldConfigFile, File newConfigFile) {
         try (FileReader reader = new FileReader(oldConfigFile)) {
             JsonObject oldConfigJson = GSON.fromJson(reader, JsonObject.class);
@@ -166,9 +143,6 @@ public class ConfigManager {
         }
     }
 
-    /**
-     * Handles configuration loading and default creation.
-     */
     private static class ConfigLoader {
         static void load(File configFile, ConfigManager manager) {
             try (FileReader reader = new FileReader(configFile)) {
@@ -237,8 +211,8 @@ public class ConfigManager {
             manager.usernameColors = Map.of();
             manager.blacklistedPlayers = Set.of();
             manager.dailyResetTime = "00:00:00";
-            if (manager.dailyPlaytimeTracker != null) {
-                manager.dailyPlaytimeTracker.setDailyResetTime(manager.dailyResetTime);
+            if (manager.dailyStatsTracker != null) {
+                manager.dailyStatsTracker.setDailyResetTime(manager.dailyResetTime);
             } else {
                 LOGGER.warn("Skipping dailyPlaytimeTracker.setDailyResetTime in resetToDefaults due to null tracker");
             }

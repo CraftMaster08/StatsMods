@@ -4,6 +4,8 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/cm08statscore/StatsMods.cm08statscore.main.iml" filepath="$PROJECT_DIR$/.idea/modules/cm08statscore/StatsMods.cm08statscore.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/cm08statscore/StatsMods.cm08statscore.test.iml" filepath="$PROJECT_DIR$/.idea/modules/cm08statscore/StatsMods.cm08statscore.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/distanceleaderboard/StatsMods.distanceleaderboard.main.iml" filepath="$PROJECT_DIR$/.idea/modules/distanceleaderboard/StatsMods.distanceleaderboard.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/distanceleaderboard/StatsMods.distanceleaderboard.test.iml" filepath="$PROJECT_DIR$/.idea/modules/distanceleaderboard/StatsMods.distanceleaderboard.test.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/playtimeleaderboard/StatsMods.playtimeleaderboard.main.iml" filepath="$PROJECT_DIR$/.idea/modules/playtimeleaderboard/StatsMods.playtimeleaderboard.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/playtimeleaderboard/StatsMods.playtimeleaderboard.test.iml" filepath="$PROJECT_DIR$/.idea/modules/playtimeleaderboard/StatsMods.playtimeleaderboard.test.iml" />
     </modules>

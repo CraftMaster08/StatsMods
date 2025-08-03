@@ -15,14 +15,11 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-/**
- * Manages a cache of player UUIDs to usernames, persisted to a JSON file.
- */
-public class PlaytimeUsernameCache {
-    private static final Logger LOGGER = LogManager.getLogger(PlaytimeUsernameCache.class);
+public class UsernameCache {
+    private static final Logger LOGGER = LogManager.getLogger(UsernameCache.class);
 
     private static class Holder {
-        private static volatile PlaytimeUsernameCache INSTANCE;
+        private static volatile UsernameCache INSTANCE;
     }
 
     private final File cacheFile;
@@ -30,29 +27,23 @@ public class PlaytimeUsernameCache {
     private final Gson gson;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
-    private PlaytimeUsernameCache(MinecraftServer server) {
+    private UsernameCache(MinecraftServer server) {
         if (server == null) {
             throw new IllegalArgumentException("MinecraftServer cannot be null");
         }
-        this.cacheFile = new File(server.getServerDirectory(), "playtime_usernames.json");
+        this.cacheFile = new File(server.getServerDirectory(), "statsconfig_username_cache.json");
         this.usernameMap = new HashMap<>();
         this.gson = new GsonBuilder().setPrettyPrinting().create();
         loadCache();
     }
 
-    /**
-     * Gets the singleton instance of the username cache.
-     *
-     * @param server The Minecraft server instance.
-     * @return The username cache instance.
-     */
-    public static PlaytimeUsernameCache getInstance(MinecraftServer server) {
-        PlaytimeUsernameCache instance = Holder.INSTANCE;
+    public static UsernameCache getInstance(MinecraftServer server) {
+        UsernameCache instance = Holder.INSTANCE;
         if (instance == null) {
-            synchronized (PlaytimeUsernameCache.class) {
+            synchronized (UsernameCache.class) {
                 instance = Holder.INSTANCE;
                 if (instance == null) {
-                    instance = new PlaytimeUsernameCache(server);
+                    instance = new UsernameCache(server);
                     Holder.INSTANCE = instance;
                 }
             }
@@ -60,12 +51,6 @@ public class PlaytimeUsernameCache {
         return instance;
     }
 
-    /**
-     * Gets the username for a given UUID.
-     *
-     * @param uuid The player's UUID.
-     * @return The username, or null if not found.
-     */
     public String getUsername(UUID uuid) {
         lock.readLock().lock();
         try {
@@ -75,12 +60,6 @@ public class PlaytimeUsernameCache {
         }
     }
 
-    /**
-     * Stores a username for a given UUID and saves the cache.
-     *
-     * @param uuid     The player's UUID.
-     * @param username The player's username.
-     */
     public void storeUsername(UUID uuid, String username) {
         lock.writeLock().lock();
         try {

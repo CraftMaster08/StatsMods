@@ -1,0 +1,8 @@
+plugins {
+    id 'base' // Enables basic Gradle tasks including wrapper
+}
+
+wrapper {
+    gradleVersion = '8.12'
+    distributionType = 'ALL'
+}

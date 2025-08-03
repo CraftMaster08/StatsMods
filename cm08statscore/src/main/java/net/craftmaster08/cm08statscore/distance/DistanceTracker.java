@@ -1,4 +1,4 @@
-/*package net.craftmaster08.cm08statscore.playtime;
+/*package net.craftmaster08.cm08statscore.distance;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -22,38 +22,50 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class PlaytimeTracker {
-    private static final Logger LOGGER = LogManager.getLogger(PlaytimeTracker.class);
-    public record PlayerPlaytime(String username, double playtime, UUID uuid) {}
+public class DistanceTracker {
+    private static final Logger LOGGER = LogManager.getLogger(DistanceTracker.class);
+    public record PlayerDistance(String username, double distanceKm, UUID uuid) {}
 
-    public static List<PlayerPlaytime> getOverallPlaytime(MinecraftServer server) {
+    // Stat names for offline player lookup and logging
+    private static final String[] OFFLINE_DISTANCE_STATS = {
+            "minecraft:walk_one_cm", "minecraft:sprint_one_cm", "minecraft:crouch_one_cm", "minecraft:swim_one_cm",
+            "minecraft:fall_one_cm", "minecraft:climb_one_cm", "minecraft:fly_one_cm", "minecraft:walk_on_water_one_cm",
+            "minecraft:walk_under_water_one_cm", "minecraft:minecart_one_cm", "minecraft:boat_one_cm", "minecraft:pig_one_cm",
+            "minecraft:horse_one_cm", "minecraft:aviate_one_cm"
+    };
+
+    public static List<PlayerDistance> getOverallDistance(MinecraftServer server) {
         return Stream.concat(
-                        getOnlinePlaytimes(server).stream(),
-                        getOfflinePlaytimes(server).stream()
-                ).sorted(Comparator.comparingDouble(PlayerPlaytime::playtime).reversed())
+                        getOnlineDistances(server).stream(),
+                        getOfflineDistances(server).stream()
+                ).sorted(Comparator.comparingDouble(PlayerDistance::distanceKm).reversed())
                 .toList();
     }
 
-    private static List<PlayerPlaytime> getOnlinePlaytimes(MinecraftServer server) {
+    private static List<PlayerDistance> getOnlineDistances(MinecraftServer server) {
         return server.getPlayerList().getPlayers().stream()
-                .map(player -> new PlayerPlaytime(
-                        player.getName().getString(),
-                        player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME)) / 20.0 / 3600.0,
-                        player.getUUID()
-                ))
+                .map(player -> {
+                    double totalDistanceCm = calculatePlayerDistance(player);
+                    double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
+                    return new PlayerDistance(
+                            player.getName().getString(),
+                            distanceKm,
+                            player.getUUID()
+                    );
+                })
                 .toList();
     }
 
-    private static List<PlayerPlaytime> getOfflinePlaytimes(MinecraftServer server) {
-        List<PlayerPlaytime> playtimes = new ArrayList<>();
+    private static List<PlayerDistance> getOfflineDistances(MinecraftServer server) {
+        List<PlayerDistance> distances = new ArrayList<>();
         File statsFolder = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
         if (!statsFolder.exists() || !statsFolder.isDirectory()) {
-            return playtimes;
+            return distances;
         }
 
         File[] statFiles = statsFolder.listFiles((dir, name) -> name.endsWith(".json"));
         if (statFiles == null) {
-            return playtimes;
+            return distances;
         }
 
         Set<UUID> onlineUUIDs = server.getPlayerList().getPlayers().stream()
@@ -78,12 +90,16 @@ public class PlaytimeTracker {
                 if (stats != null) {
                     JsonObject custom = stats.getAsJsonObject("minecraft:custom");
                     if (custom != null) {
-                        JsonElement playTimeElement = custom.get("minecraft:play_time");
-                        if (playTimeElement != null) {
-                            double hours = playTimeElement.getAsLong() / 20.0 / 3600.0;
-                            String username = UsernameResolver.resolve(server, uuid, uuidString);
-                            playtimes.add(new PlayerPlaytime(username, hours, uuid));
+                        double totalDistanceCm = 0.0;
+                        for (String stat : OFFLINE_DISTANCE_STATS) {
+                            JsonElement element = custom.get(stat);
+                            if (element != null) {
+                                totalDistanceCm += element.getAsLong();
+                            }
                         }
+                        double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
+                        String username = UsernameResolver.resolve(server, uuid, uuidString);
+                        distances.add(new PlayerDistance(username, distanceKm, uuid));
                     }
                 }
             } catch (IOException | IllegalArgumentException e) {
@@ -91,7 +107,28 @@ public class PlaytimeTracker {
             }
         }
 
-        return playtimes;
+        return distances;
+    }
+
+    private static double calculatePlayerDistance(ServerPlayer player) {
+        double totalDistanceCm = 0.0;
+
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.WALK_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.SPRINT_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.CROUCH_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.SWIM_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.FALL_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.CLIMB_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.FLY_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.WALK_ON_WATER_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.WALK_UNDER_WATER_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.MINECART_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.BOAT_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.PIG_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.HORSE_ONE_CM));
+        totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.AVIATE_ONE_CM));
+
+        return totalDistanceCm;
     }
 
     private interface UsernameResolver {
