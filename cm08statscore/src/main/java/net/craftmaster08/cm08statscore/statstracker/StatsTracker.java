@@ -3,6 +3,7 @@ package net.craftmaster08.cm08statscore.statstracker;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.cache.UsernameCache;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class StatsTracker {
+    private static final int UInt32Limit = 2147483647;
     private static final Logger LOGGER = LogManager.getLogger(StatsTracker.class);
     public record PlayerDistance(String username, double distanceKm, UUID uuid) {}
     public record PlayerPlaytime(String username, double playtime, UUID uuid) {}
@@ -52,6 +54,9 @@ public class StatsTracker {
             totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.PIG_ONE_CM));
             totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.HORSE_ONE_CM));
             totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.AVIATE_ONE_CM));
+
+            int intLimitCount = StatsCore.getConfigManager().getIntLimits().getOrDefault(player.getName().getString(), 0);
+            totalDistanceCm += (double) intLimitCount * UInt32Limit;
         } catch (Exception e) {
             LOGGER.error("Error calculating distance for player {}: {}", player.getName().getString(), e.getMessage());
         }
@@ -139,8 +144,10 @@ public class StatsTracker {
                                 totalDistanceCm += element.getAsLong();
                             }
                         }
-                        double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
                         String username = UsernameResolver.resolve(server, uuid, uuidString);
+                        int intLimitCount = StatsCore.getConfigManager().getIntLimits().getOrDefault(username, 0);
+                        totalDistanceCm += (double) intLimitCount * UInt32Limit;
+                        double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
                         distances.add(new PlayerDistance(username, distanceKm, uuid));
                     }
                 }

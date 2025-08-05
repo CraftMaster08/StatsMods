@@ -2,6 +2,7 @@ package net.craftmaster08.cm08statscore;
 
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -56,7 +57,14 @@ public class StatsConfigCommand {
                 .then(Commands.literal("dailyresettime")
                         .executes(StatsConfigCommand::dailyResetTimeShow)
                         .then(Commands.argument("time", StringArgumentType.greedyString())
-                                .executes(context -> dailyResetTimeSet(context, StringArgumentType.getString(context, "time")))));
+                                .executes(context -> dailyResetTimeSet(context, StringArgumentType.getString(context, "time")))))
+                .then(Commands.literal("intlimit")
+                        .then(Commands.argument("player", StringArgumentType.word())
+                                .suggests(onlinePlayers())
+                                .executes(context -> displayIntLimitAmount(context, StringArgumentType.getString(context, "player")))
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(context -> setIntLimitAmount(context, StringArgumentType.getString(context, "player"), IntegerArgumentType.getInteger(context, "amount")))))));
 
         try {
             dispatcher.register(command);
@@ -80,9 +88,6 @@ public class StatsConfigCommand {
         };
     }
 
-    /**
-     * Suggestion provider for blacklisted players.
-     */
     private static SuggestionProvider<CommandSourceStack> blacklistedPlayers() {
         return (context, builder) -> {
             ConfigManager config = StatsCore.getConfigManager();
@@ -336,12 +341,58 @@ public class StatsConfigCommand {
         config.getBlacklistedPlayers().forEach(blacklistedPlayersJson::add);
         configJson.add("blacklisted_players", blacklistedPlayersJson);
 
+        JsonObject intLimitsJson = new JsonObject();
+        config.getIntLimits().forEach(intLimitsJson::addProperty);
+        configJson.add("intlimits", intLimitsJson);
+
         try (java.io.FileWriter writer = new java.io.FileWriter(ConfigManager.CONFIG_PATH.toFile())) {
             new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(configJson, writer);
             LOGGER.info("Saved statscore_config.json");
         } catch (java.io.IOException e) {
             LOGGER.error("Failed to save statscore_config.json", e);
             throw new RuntimeException("Failed to save configuration", e);
+        }
+    }
+
+    private static int displayIntLimitAmount(CommandContext<CommandSourceStack> context, String player) {
+        CommandSourceStack source = context.getSource();
+        try {
+            ConfigManager config = StatsCore.getConfigManager();
+            if (config == null) {
+                throw new IllegalStateException("ConfigManager not initialized");
+            }
+            int limitCount = config.getIntLimits().getOrDefault(player, 0);
+            source.sendSystemMessage(Component.literal(player + "'s intlimit count: " + limitCount)
+                    .withStyle(ChatFormatting.WHITE));
+            return 1;
+        } catch (Exception e) {
+            source.sendSystemMessage(Component.literal("Failed to show intlimit count for " + player + ": " + e.getMessage())
+                    .withStyle(ChatFormatting.RED));
+            LOGGER.error("Failed to show intlimit count for {}", player, e);
+            return 0;
+        }
+    }
+
+    private static int setIntLimitAmount(CommandContext<CommandSourceStack> context, String player, int amount) {
+        CommandSourceStack source = context.getSource();
+        try {
+            ConfigManager config = StatsCore.getConfigManager();
+            if (config == null) {
+                throw new IllegalStateException("ConfigManager not initialized");
+            }
+            Map<String, Integer> intLimits = new HashMap<>(config.getIntLimits());
+            intLimits.put(player, amount);
+            config.intLimits = Map.copyOf(intLimits);
+            saveConfig(config);
+            source.sendSystemMessage(Component.literal("Set " + player + "'s intlimit count to " + amount)
+                    .withStyle(ChatFormatting.GREEN));
+            LOGGER.info("{} set {}'s intlimit count to {}", source.getTextName(), player, amount);
+            return 1;
+        } catch (Exception e) {
+            source.sendSystemMessage(Component.literal("Failed to set intlimit count for " + player + ": " + e.getMessage())
+                    .withStyle(ChatFormatting.RED));
+            LOGGER.error("Failed to set intlimit count for {} to {}", player, amount, e);
+            return 0;
         }
     }
 }

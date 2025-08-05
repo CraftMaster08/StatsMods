@@ -22,6 +22,7 @@ public class ConfigManager {
 
     public Map<String, ChatFormatting> usernameColors;
     public Set<String> blacklistedPlayers;
+    public Map<String, Integer> intLimits;
     public String dailyResetTime;
     public final DailyStatsTracker dailyStatsTracker;
 
@@ -32,6 +33,7 @@ public class ConfigManager {
         }
         this.usernameColors = Map.of();
         this.blacklistedPlayers = Set.of();
+        this.intLimits = Map.of();
         this.dailyResetTime = "00:00:00";
         loadConfig();
     }
@@ -43,6 +45,8 @@ public class ConfigManager {
     public Set<String> getBlacklistedPlayers() {
         return blacklistedPlayers;
     }
+
+    public Map<String, Integer> getIntLimits() { return intLimits; }
 
     public void loadConfig() {
         File configFile = CONFIG_PATH.toFile();
@@ -109,6 +113,21 @@ public class ConfigManager {
                         });
             }
 
+            Map<String, Integer> tempIntLimits = new HashMap<>();
+            if (oldConfigJson.has("intlimits")) {
+                JsonObject intLimitsJson = oldConfigJson.getAsJsonObject("intlimits");
+                for (Map.Entry<String, com.google.gson.JsonElement> entry : intLimitsJson.entrySet()) {
+                    String username = entry.getKey();
+                    int limitCount = entry.getValue().getAsInt();
+                    if (limitCount >= 0) {
+                        tempIntLimits.put(username, limitCount);
+                        LOGGER.info("Migrated intlimit for {}: {}", username, limitCount);
+                    } else {
+                        LOGGER.warn("Invalid intlimit count for {}: {}", username, limitCount);
+                    }
+                }
+            }
+
             String tempDailyResetTime = oldConfigJson.has("daily_reset_time")
                     ? oldConfigJson.get("daily_reset_time").getAsString().replaceAll("\\s*UTC.*", "")
                     : "00:00:00";
@@ -126,6 +145,10 @@ public class ConfigManager {
             tempBlacklistedPlayers.forEach(blacklistedPlayersArray::add);
             newConfig.add("blacklisted_players", blacklistedPlayersArray);
 
+            JsonObject intLimitsJson = new JsonObject();
+            tempIntLimits.forEach(intLimitsJson::addProperty);
+            newConfig.add("intlimits", intLimitsJson);
+
             // Write new config to statscore_config.json
             try (FileWriter writer = new FileWriter(newConfigFile)) {
                 GSON.toJson(newConfig, writer);
@@ -135,6 +158,7 @@ public class ConfigManager {
             // Update ConfigManager fields
             this.usernameColors = Map.copyOf(tempUsernameColors);
             this.blacklistedPlayers = Set.copyOf(tempBlacklistedPlayers);
+            this.intLimits = Map.copyOf(tempIntLimits);
             this.dailyResetTime = tempDailyResetTime;
             return true;
         } catch (IOException | JsonParseException e) {
@@ -176,15 +200,32 @@ public class ConfigManager {
                             });
                 }
 
+                Map<String, Integer> tempIntLimits = new HashMap<>();
+                if (configJson.has("intlimits")) {
+                    JsonObject intLimitsJson = configJson.getAsJsonObject("intlimits");
+                    for (Map.Entry<String, com.google.gson.JsonElement> entry : intLimitsJson.entrySet()) {
+                        String username = entry.getKey();
+                        int limitCount = entry.getValue().getAsInt();
+                        if (limitCount >= 0) {
+                            tempIntLimits.put(username, limitCount);
+                            LOGGER.info("Loaded intlimit for {}: {}", username, limitCount);
+                        } else {
+                            LOGGER.warn("Invalid intlimit count for {}: {}", username, limitCount);
+                        }
+                    }
+                }
+
                 String tempDailyResetTime = configJson.has("daily_reset_time")
                         ? configJson.get("daily_reset_time").getAsString()
                         : "00:00:00";
 
                 manager.usernameColors = Map.copyOf(tempUsernameColors);
                 manager.blacklistedPlayers = Set.copyOf(tempBlacklistedPlayers);
+                manager.intLimits = Map.copyOf(tempIntLimits);
                 manager.dailyResetTime = tempDailyResetTime;
                 LOGGER.info("Successfully loaded statscore_config.json");
                 LOGGER.info("Blacklisted players after loading: {}", tempBlacklistedPlayers);
+                LOGGER.info("Intlimits after loading: {}", tempIntLimits);
             } catch (IOException | JsonParseException e) {
                 LOGGER.error("Failed to load statscore_config.json", e);
                 resetToDefaults(manager);
@@ -197,6 +238,7 @@ public class ConfigManager {
             defaultConfig.addProperty("daily_reset_time", "00:00:00");
             defaultConfig.add("username_colors", new JsonObject());
             defaultConfig.add("blacklisted_players", new com.google.gson.JsonArray());
+            defaultConfig.add("intlimits", new JsonObject());
 
             try (FileWriter writer = new FileWriter(configFile)) {
                 GSON.toJson(defaultConfig, writer);
@@ -210,6 +252,7 @@ public class ConfigManager {
             LOGGER.warn("Resetting to default configuration");
             manager.usernameColors = Map.of();
             manager.blacklistedPlayers = Set.of();
+            manager.intLimits = Map.of();
             manager.dailyResetTime = "00:00:00";
             if (manager.dailyStatsTracker != null) {
                 manager.dailyStatsTracker.setDailyResetTime(manager.dailyResetTime);

@@ -1,10 +1,10 @@
 ### All mods are Server-Side (not required on client)
-# StatsCore (v0.2)
+# StatsCore (v0.3)
 
 Library Mod required for all Statistics Mods.
 
 # Playtime Leaderboard (v0.3)
-### (StatsCore v0.2)
+### (StatsCore Version 0.2,0.3)
 
 A Minecraft Forge mod for version 1.20.1 that adds a `/playtime` command to display playtime statistics for all players (online and offline) on a server or singleplayer world. The mod provides a detailed, formatted leaderboard with customizable colors, podium ranks, and alignment for an enhanced user experience.
 
@@ -30,7 +30,7 @@ A Minecraft Forge mod for version 1.20.1 that adds a `/playtime` command to disp
 
 
 # Distance Leaderboard (v0.1)
-### (Statscore v0.2)
+### (Statscore Version 0.2,0.3)
 
 Same applies here, just for distance traveled displayed in km.
 This Mod does not include a Stats Color Coding feature! (only player names, which is a feature of StatsCore)
@@ -56,6 +56,11 @@ The configuration can be edited by using the `/statscore` command (OP is require
 
 - **Reloading Config**:
 -  `/statscore reload` Reloads the config.
+
+### Advanced
+- **Integer Limit**: Add the distance of one Minecraft Stat back if a reset is necessary. (After 21474 km, which is the max for one distance stat)
+- `/statscore intlimit <player>` Shows the amount of Integer Limts a player has.
+- `/statscore intlimit <player> set <amount>` Sets the players Integer Limit to specified amount.
 
 ---
 
