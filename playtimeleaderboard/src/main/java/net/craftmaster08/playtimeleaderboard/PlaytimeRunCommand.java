@@ -4,8 +4,8 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
-import net.craftmaster08.cm08statscore.playtime.DailyPlaytimeTracker;
-import net.craftmaster08.cm08statscore.playtime.PlaytimeTracker;
+import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
+import net.craftmaster08.cm08statscore.statstracker.StatsTracker;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -21,17 +21,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Registers and executes the /playtime command to display a leaderboard of player playtimes.
- */
 public class PlaytimeRunCommand {
     private static final Logger LOGGER = LogManager.getLogger(PlaytimeRunCommand.class);
 
-    /**
-     * Registers the /playtime command with the command dispatcher.
-     *
-     * @param dispatcher The command dispatcher to register the command with.
-     */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("playtime")
                 .requires(source -> source.hasPermission(0))
@@ -45,20 +37,17 @@ public class PlaytimeRunCommand {
         }
     }
 
-    /**
-     * Handles the execution of the /playtime command, fetching and displaying the leaderboard.
-     */
     private static class LeaderboardExecutor {
         private final CommandSourceStack source;
         private final MinecraftServer server;
         private final ConfigManager config;
-        private final DailyPlaytimeTracker dailyPlaytimeTracker;
+        private final DailyStatsTracker dailyStatsTracker;
 
         LeaderboardExecutor(CommandSourceStack source) {
             this.source = source;
             this.server = PlaytimeLeaderboard.getServer();
             this.config = StatsCore.getConfigManager();
-            this.dailyPlaytimeTracker = StatsCore.getDailyPlaytimeTracker();
+            this.dailyStatsTracker = StatsCore.getDailyStatsTracker();
         }
 
         int execute() {
@@ -70,11 +59,11 @@ public class PlaytimeRunCommand {
                 sendError("StatsCore configuration not initialized");
                 return 0;
             }
-            if (dailyPlaytimeTracker == null) {
+            if (dailyStatsTracker == null) {
                 LOGGER.warn("DailyPlaytimeTracker unavailable; daily playtime hover text disabled");
             }
 
-            List<PlaytimeTracker.PlayerPlaytime> playtimes = fetchPlaytimes();
+            List<StatsTracker.PlayerPlaytime> playtimes = fetchPlaytimes();
             if (playtimes == null) {
                 return 0;
             }
@@ -88,15 +77,15 @@ public class PlaytimeRunCommand {
                     playtimes,
                     config.getBlacklistedPlayers(),
                     config.getUsernameColors(),
-                    dailyPlaytimeTracker
+                    dailyStatsTracker
             );
             formatter.displayLeaderboard(source);
             return 1;
         }
 
-        private List<PlaytimeTracker.PlayerPlaytime> fetchPlaytimes() {
+        private List<StatsTracker.PlayerPlaytime> fetchPlaytimes() {
             try {
-                return PlaytimeTracker.getOverallPlaytime(server);
+                return StatsTracker.getOverallPlaytime(server);
             } catch (Exception e) {
                 sendError("Failed to retrieve playtime data: " + e.getMessage());
                 LOGGER.error("Failed to retrieve playtime data", e);
@@ -110,33 +99,30 @@ public class PlaytimeRunCommand {
         }
     }
 
-    /**
-     * Formats and displays the playtime leaderboard.
-     */
     private static class LeaderboardFormatter {
         private static final int BASE_PADDING = 16;
         private static final int RANK_LENGTH = 3;
 
-        private final List<PlaytimeTracker.PlayerPlaytime> playtimes;
+        private final List<StatsTracker.PlayerPlaytime> playtimes;
         private final Set<String> blacklistedPlayers;
         private final Map<String, ChatFormatting> usernameColors;
-        private final DailyPlaytimeTracker dailyPlaytimeTracker;
+        private final DailyStatsTracker dailyStatsTracker;
 
         LeaderboardFormatter(
-                List<PlaytimeTracker.PlayerPlaytime> playtimes,
+                List<StatsTracker.PlayerPlaytime> playtimes,
                 Set<String> blacklistedPlayers,
                 Map<String, ChatFormatting> usernameColors,
-                DailyPlaytimeTracker dailyPlaytimeTracker
+                DailyStatsTracker dailyStatsTracker
         ) {
             this.playtimes = playtimes;
             this.blacklistedPlayers = blacklistedPlayers;
             this.usernameColors = usernameColors;
-            this.dailyPlaytimeTracker = dailyPlaytimeTracker;
+            this.dailyStatsTracker = dailyStatsTracker;
         }
 
         void displayLeaderboard(CommandSourceStack source) {
             // Filter out blacklisted players
-            List<PlaytimeTracker.PlayerPlaytime> filteredPlaytimes = playtimes.stream()
+            List<StatsTracker.PlayerPlaytime> filteredPlaytimes = playtimes.stream()
                     .filter(pt -> !blacklistedPlayers.contains(pt.username()))
                     .toList();
 
@@ -168,14 +154,14 @@ public class PlaytimeRunCommand {
             source.sendSystemMessage(borderComponent);
         }
 
-        private int calculateMaxUsernameLength(List<PlaytimeTracker.PlayerPlaytime> playtimes) {
+        private int calculateMaxUsernameLength(List<StatsTracker.PlayerPlaytime> playtimes) {
             return playtimes.stream()
                     .map(pt -> (pt.username() + ":").length())
                     .max(Integer::compareTo)
                     .orElse(0);
         }
 
-        private int calculateMaxLineLength(int totalPadding, List<PlaytimeTracker.PlayerPlaytime> playtimes) {
+        private int calculateMaxLineLength(int totalPadding, List<StatsTracker.PlayerPlaytime> playtimes) {
             int maxLineLength = 0;
             for (int i = 0; i < playtimes.size(); i++) {
                 int lineLength = 0;
@@ -200,7 +186,7 @@ public class PlaytimeRunCommand {
             return Math.max(maxLineLength, 9);
         }
 
-        private void formatPlayerEntry(CommandSourceStack source, PlaytimeTracker.PlayerPlaytime pt, int position, int totalPadding) {
+        private void formatPlayerEntry(CommandSourceStack source, StatsTracker.PlayerPlaytime pt, int position, int totalPadding) {
             PodiumRank rank = PodiumRank.fromPosition(position);
             MutableComponent message = rank.formatRank();
             if (rank != PodiumRank.NONE) {
@@ -215,9 +201,9 @@ public class PlaytimeRunCommand {
                     .withStyle(Style.EMPTY.withColor(usernameColor).withBold(false));
 
             MutableComponent hours = HourRange.findRange(pt.playtime()).formatHours(pt.playtime());
-            if (dailyPlaytimeTracker != null) {
-                double dailyHours = dailyPlaytimeTracker.getDailyPlaytime(pt.uuid());
-                String dailyText = DailyPlaytimeTracker.formatDailyPlaytime(dailyHours);
+            if (dailyStatsTracker != null) {
+                double dailyHours = dailyStatsTracker.getDailyPlaytime(pt.uuid());
+                String dailyText = DailyStatsTracker.formatDailyPlaytime(dailyHours);
                 hours = hours.withStyle(hours.getStyle().withHoverEvent(
                         new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(dailyText))
                 ));
@@ -240,9 +226,6 @@ public class PlaytimeRunCommand {
         }
     }
 
-    /**
-     * Represents a podium rank for the top 3 players in the leaderboard.
-     */
     private enum PodiumRank {
         FIRST(1, ChatFormatting.GOLD, true),
         SECOND(2, ChatFormatting.WHITE, true),
@@ -281,9 +264,6 @@ public class PlaytimeRunCommand {
         }
     }
 
-    /**
-     * Defines hour ranges for formatting playtime with colors and symbols.
-     */
     private enum HourRange {
         UNDER_100(0, 100, new ChatFormatting[]{ChatFormatting.GRAY}, ChatFormatting.GRAY, null, null),
         H_100_199(100, 200, new ChatFormatting[]{ChatFormatting.WHITE}, ChatFormatting.WHITE, null, null),

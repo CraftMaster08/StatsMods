@@ -5,9 +5,9 @@ license="MIT"
 [[mods]]
 modId="playtimeleaderboard"
 namespace="playtimeleaderboard"
-version="0.1-1.20.1"
+version="0.3-1.20.1"
 displayName="Playtime-Leaderboard"
-description="Shows a leaderboard of playtime statistics using StatsCore."
+description="Shows a formatted leaderboard of playtime statistics."
 authors="CraftMaster2008"
 
 [[dependencies.playtimeleaderboard]]
@@ -25,6 +25,6 @@ side="SERVER"
 [[dependencies.playtimeleaderboard]]
 modId="cm08statscore"
 mandatory=true
-versionRange="[0.1,)"
+versionRange="[0.2,1.0)"
 ordering="AFTER"
 side="SERVER"

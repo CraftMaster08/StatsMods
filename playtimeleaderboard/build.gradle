@@ -93,6 +93,11 @@ tasks.named('jar', Jar).configure {
     finalizedBy 'reobfJar'
 }
 
+tasks.register('wrapper', Wrapper) {
+    gradleVersion = '8.12'
+    distributionType = Wrapper.DistributionType.ALL
+}
+
 publishing {
     publications {
         register('mavenJava', MavenPublication) {

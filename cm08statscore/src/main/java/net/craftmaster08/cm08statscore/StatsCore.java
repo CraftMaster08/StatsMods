@@ -1,8 +1,8 @@
 package net.craftmaster08.cm08statscore;
 
-import net.craftmaster08.cm08statscore.cache.PlaytimeUsernameCache;
+import net.craftmaster08.cm08statscore.cache.UsernameCache;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
-import net.craftmaster08.cm08statscore.playtime.DailyPlaytimeTracker;
+import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.MinecraftForge;
@@ -16,16 +16,13 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/**
- * Main class for the StatsCore mod, managing core functionality and dependencies.
- */
 @Mod(StatsCore.MODID)
 public class StatsCore {
     public static final String MODID = "cm08statscore";
     private static final Logger LOGGER = LogManager.getLogger(StatsCore.class);
     private static ConfigManager configManager;
-    private static PlaytimeUsernameCache usernameCache;
-    private static DailyPlaytimeTracker dailyPlaytimeTracker;
+    private static UsernameCache usernameCache;
+    private static DailyStatsTracker dailyStatsTracker;
     private static MinecraftServer server;
 
     public StatsCore() {
@@ -39,9 +36,6 @@ public class StatsCore {
         LOGGER.info("Registered StatsCore commands");
     }
 
-    /**
-     * Handles server and player events for StatsCore.
-     */
     private static class EventHandler {
         @SubscribeEvent(priority = EventPriority.LOW)
         public void onServerStarting(ServerStartingEvent event) {
@@ -54,8 +48,9 @@ public class StatsCore {
         @SubscribeEvent
         public void onPlayerTick(TickEvent.PlayerTickEvent event) {
             if (event.phase == TickEvent.Phase.END && event.player instanceof ServerPlayer player) {
-                if (player.tickCount % 100 == 0 && dailyPlaytimeTracker != null) {
-                    dailyPlaytimeTracker.updatePlayer(player);
+                if (player.tickCount % 100 == 0 && dailyStatsTracker != null) {
+                    dailyStatsTracker.updatePlayerPlaytime(player);
+                    dailyStatsTracker.updatePlayerDistance(player);
                 }
             }
         }
@@ -63,8 +58,8 @@ public class StatsCore {
         @SubscribeEvent
         public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
             if (event.getEntity() instanceof ServerPlayer player) {
-                if (dailyPlaytimeTracker != null) {
-                    dailyPlaytimeTracker.playerLoggedIn(player);
+                if (dailyStatsTracker != null) {
+                    dailyStatsTracker.playerLoggedIn(player);
                 }
                 if (usernameCache != null) {
                     usernameCache.storeUsername(player.getUUID(), player.getGameProfile().getName());
@@ -74,26 +69,22 @@ public class StatsCore {
 
         @SubscribeEvent
         public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-            if (event.getEntity() instanceof ServerPlayer player && dailyPlaytimeTracker != null) {
-                dailyPlaytimeTracker.playerLoggedOut(player);
+            if (event.getEntity() instanceof ServerPlayer player && dailyStatsTracker != null) {
+                dailyStatsTracker.playerLoggedOut(player);
             }
         }
     }
 
-    /**
-     * Initializes StatsCore services during server startup.
-     */
     private static class ServiceInitializer {
         static void initialize(MinecraftServer server) {
             try {
-                dailyPlaytimeTracker = new DailyPlaytimeTracker(server);
-                LOGGER.info("DailyPlaytimeTracker initialized successfully");
+                dailyStatsTracker = new DailyStatsTracker(server);
             } catch (RuntimeException e) {
-                LOGGER.error("Failed to initialize DailyPlaytimeTracker: {}", e.getMessage(), e);
-                dailyPlaytimeTracker = null;
+                LOGGER.error("Failed to initialize DailyStatsTracker: {}", e.getMessage(), e);
+                dailyStatsTracker = null;
             }
-            configManager = new ConfigManager(dailyPlaytimeTracker);
-            usernameCache = PlaytimeUsernameCache.getInstance(server);
+            configManager = new ConfigManager(dailyStatsTracker);
+            usernameCache = UsernameCache.getInstance(server);
             try {
                 configManager.loadConfig();
             } catch (Exception e) {
@@ -102,11 +93,6 @@ public class StatsCore {
         }
     }
 
-    /**
-     * Gets the configuration manager instance.
-     *
-     * @return The ConfigManager, or null if not initialized.
-     */
     public static ConfigManager getConfigManager() {
         if (configManager == null) {
             LOGGER.warn("ConfigManager accessed before initialization");
@@ -114,15 +100,10 @@ public class StatsCore {
         return configManager;
     }
 
-    /**
-     * Gets the daily playtime tracker instance.
-     *
-     * @return The DailyPlaytimeTracker, or null if not initialized.
-     */
-    public static DailyPlaytimeTracker getDailyPlaytimeTracker() {
-        if (dailyPlaytimeTracker == null) {
-            LOGGER.warn("DailyPlaytimeTracker accessed but is null");
+    public static DailyStatsTracker getDailyStatsTracker() {
+        if (dailyStatsTracker == null) {
+            LOGGER.warn("DailyStatsTracker accessed but is null");
         }
-        return dailyPlaytimeTracker;
+        return dailyStatsTracker;
     }
 }

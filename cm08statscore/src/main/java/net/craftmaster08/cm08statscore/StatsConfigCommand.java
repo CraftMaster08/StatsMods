@@ -2,6 +2,7 @@ package net.craftmaster08.cm08statscore;
 
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -19,9 +20,6 @@ import org.apache.logging.log4j.Logger;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Registers and handles the /statsconfig command and its subcommands for managing StatsCore configuration.
- */
 public class StatsConfigCommand {
     private static final Logger LOGGER = LogManager.getLogger(StatsConfigCommand.class);
 
@@ -30,11 +28,6 @@ public class StatsConfigCommand {
             .map(color -> color.getName().toUpperCase())
             .collect(Collectors.toList());
 
-    /**
-     * Registers the /statsconfig command and its subcommands.
-     *
-     * @param dispatcher The command dispatcher to register the command with.
-     */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("statsconfig")
                 .requires(source -> source.hasPermission(2))
@@ -64,7 +57,14 @@ public class StatsConfigCommand {
                 .then(Commands.literal("dailyresettime")
                         .executes(StatsConfigCommand::dailyResetTimeShow)
                         .then(Commands.argument("time", StringArgumentType.greedyString())
-                                .executes(context -> dailyResetTimeSet(context, StringArgumentType.getString(context, "time")))));
+                                .executes(context -> dailyResetTimeSet(context, StringArgumentType.getString(context, "time")))))
+                .then(Commands.literal("intlimit")
+                        .then(Commands.argument("player", StringArgumentType.word())
+                                .suggests(onlinePlayers())
+                                .executes(context -> displayIntLimitAmount(context, StringArgumentType.getString(context, "player")))
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(context -> setIntLimitAmount(context, StringArgumentType.getString(context, "player"), IntegerArgumentType.getInteger(context, "amount")))))));
 
         try {
             dispatcher.register(command);
@@ -74,9 +74,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Suggestion provider for online players.
-     */
     private static SuggestionProvider<CommandSourceStack> onlinePlayers() {
         return (context, builder) -> {
             MinecraftServer server = context.getSource().getServer();
@@ -91,9 +88,6 @@ public class StatsConfigCommand {
         };
     }
 
-    /**
-     * Suggestion provider for blacklisted players.
-     */
     private static SuggestionProvider<CommandSourceStack> blacklistedPlayers() {
         return (context, builder) -> {
             ConfigManager config = StatsCore.getConfigManager();
@@ -104,9 +98,6 @@ public class StatsConfigCommand {
         };
     }
 
-    /**
-     * Reloads the StatsCore configuration file.
-     */
     private static int reloadConfig(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         try {
@@ -127,9 +118,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Adds a player to the blacklist and saves the config.
-     */
     private static int blacklistAdd(CommandContext<CommandSourceStack> context, String player) {
         CommandSourceStack source = context.getSource();
         try {
@@ -158,9 +146,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Lists all blacklisted players.
-     */
     private static int blacklistList(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         try {
@@ -187,9 +172,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Removes a player from the blacklist and saves the config.
-     */
     private static int blacklistRemove(CommandContext<CommandSourceStack> context, String player) {
         CommandSourceStack source = context.getSource();
         try {
@@ -218,9 +200,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Shows the color of a player.
-     */
     private static int colorShow(CommandContext<CommandSourceStack> context, String player) {
         CommandSourceStack source = context.getSource();
         try {
@@ -241,9 +220,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Sets a player's color and saves the config.
-     */
     private static int colorSet(CommandContext<CommandSourceStack> context, String player, String colorName) {
         CommandSourceStack source = context.getSource();
         try {
@@ -273,9 +249,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Resets a player's color to white and saves the config.
-     */
     private static int colorReset(CommandContext<CommandSourceStack> context, String player) {
         CommandSourceStack source = context.getSource();
         try {
@@ -304,9 +277,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Shows the daily reset time.
-     */
     private static int dailyResetTimeShow(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         try {
@@ -326,9 +296,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Sets the daily reset time and saves the config.
-     */
     private static int dailyResetTimeSet(CommandContext<CommandSourceStack> context, String time) {
         CommandSourceStack source = context.getSource();
         try {
@@ -344,8 +311,8 @@ public class StatsConfigCommand {
                 return 0;
             }
             config.dailyResetTime = time;
-            if (config.dailyPlaytimeTracker != null) {
-                config.dailyPlaytimeTracker.setDailyResetTime(time);
+            if (config.dailyStatsTracker != null) {
+                config.dailyStatsTracker.setDailyResetTime(time);
             }
             saveConfig(config);
             source.sendSystemMessage(Component.literal("Set daily reset time to " + time + " UTC")
@@ -360,9 +327,6 @@ public class StatsConfigCommand {
         }
     }
 
-    /**
-     * Saves the configuration to disk.
-     */
     private static void saveConfig(ConfigManager config) {
         JsonObject configJson = new JsonObject();
         configJson.addProperty("_comment", "DO NOT EDIT THIS FILE MANUALLY. Use /statsconfig commands to modify settings.");
@@ -377,12 +341,58 @@ public class StatsConfigCommand {
         config.getBlacklistedPlayers().forEach(blacklistedPlayersJson::add);
         configJson.add("blacklisted_players", blacklistedPlayersJson);
 
+        JsonObject intLimitsJson = new JsonObject();
+        config.getIntLimits().forEach(intLimitsJson::addProperty);
+        configJson.add("intlimits", intLimitsJson);
+
         try (java.io.FileWriter writer = new java.io.FileWriter(ConfigManager.CONFIG_PATH.toFile())) {
             new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(configJson, writer);
             LOGGER.info("Saved statscore_config.json");
         } catch (java.io.IOException e) {
             LOGGER.error("Failed to save statscore_config.json", e);
             throw new RuntimeException("Failed to save configuration", e);
+        }
+    }
+
+    private static int displayIntLimitAmount(CommandContext<CommandSourceStack> context, String player) {
+        CommandSourceStack source = context.getSource();
+        try {
+            ConfigManager config = StatsCore.getConfigManager();
+            if (config == null) {
+                throw new IllegalStateException("ConfigManager not initialized");
+            }
+            int limitCount = config.getIntLimits().getOrDefault(player, 0);
+            source.sendSystemMessage(Component.literal(player + "'s intlimit count: " + limitCount)
+                    .withStyle(ChatFormatting.WHITE));
+            return 1;
+        } catch (Exception e) {
+            source.sendSystemMessage(Component.literal("Failed to show intlimit count for " + player + ": " + e.getMessage())
+                    .withStyle(ChatFormatting.RED));
+            LOGGER.error("Failed to show intlimit count for {}", player, e);
+            return 0;
+        }
+    }
+
+    private static int setIntLimitAmount(CommandContext<CommandSourceStack> context, String player, int amount) {
+        CommandSourceStack source = context.getSource();
+        try {
+            ConfigManager config = StatsCore.getConfigManager();
+            if (config == null) {
+                throw new IllegalStateException("ConfigManager not initialized");
+            }
+            Map<String, Integer> intLimits = new HashMap<>(config.getIntLimits());
+            intLimits.put(player, amount);
+            config.intLimits = Map.copyOf(intLimits);
+            saveConfig(config);
+            source.sendSystemMessage(Component.literal("Set " + player + "'s intlimit count to " + amount)
+                    .withStyle(ChatFormatting.GREEN));
+            LOGGER.info("{} set {}'s intlimit count to {}", source.getTextName(), player, amount);
+            return 1;
+        } catch (Exception e) {
+            source.sendSystemMessage(Component.literal("Failed to set intlimit count for " + player + ": " + e.getMessage())
+                    .withStyle(ChatFormatting.RED));
+            LOGGER.error("Failed to set intlimit count for {} to {}", player, amount, e);
+            return 0;
         }
     }
 }

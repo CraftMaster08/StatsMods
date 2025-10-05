@@ -17,3 +17,4 @@ rootProject.name = 'StatsMods'
 
 include 'cm08statscore'
 include 'playtimeleaderboard'
+include 'distanceleaderboard'
