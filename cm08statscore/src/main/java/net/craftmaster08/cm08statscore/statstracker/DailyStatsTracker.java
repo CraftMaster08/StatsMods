@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stat;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.level.storage.LevelResource;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -25,6 +26,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import static net.craftmaster08.cm08statscore.statstracker.StatsTracker.calculatePlayerDistance;
+import static net.minecraft.stats.Stats.DEATHS;
+import static net.minecraft.stats.Stats.PLAY_TIME;
 
 public class DailyStatsTracker {
     private static final Logger LOGGER = LogManager.getLogger(DailyStatsTracker.class);
@@ -32,13 +35,17 @@ public class DailyStatsTracker {
 
     private final Path distanceDataPath;
     private final Path playtimeDataPath;
+    private final Path deathsDataPath;
     private final MinecraftServer server;
     private final ResetScheduler resetScheduler;
     private final Map<UUID, Double> dailyPlaytimes;
     private final Map<UUID, Double> dailyDistances;
+    private static final Map<UUID, Double> dailyDeaths = new HashMap<>();
     private final Map<UUID, Long> playtimeLastKnownTicks;
     private final Map<UUID, Long> distanceLastKnownTicks;
+    private final Map<UUID, Double> deathsLastKnownTicks;
     private final Stat<?> playTimeStat;
+    private final Stat<?> deathStat;
 
     public DailyStatsTracker(MinecraftServer server) {
         if (server == null) {
@@ -47,20 +54,20 @@ public class DailyStatsTracker {
         this.server = server;
         this.distanceDataPath = server.getWorldPath(LevelResource.ROOT).resolve("distance_daily.json");
         this.playtimeDataPath = server.getWorldPath(LevelResource.ROOT).resolve("playtime_daily.json");
+        this.deathsDataPath = server.getWorldPath(LevelResource.ROOT).resolve("deaths_daily.json");
         this.dailyPlaytimes = new HashMap<>();
         this.dailyDistances = new HashMap<>();
+        //this.dailyDeaths = new HashMap<>();
         this.playtimeLastKnownTicks = new HashMap<>();
         this.distanceLastKnownTicks = new HashMap<>();
+        this.deathsLastKnownTicks = new HashMap<>();
         this.resetScheduler = new DailyStatsTracker.ResetScheduler(this);
         try {
             this.playTimeStat = Stats.CUSTOM.get(Stats.PLAY_TIME);
-            if (this.playTimeStat == null) {
-                throw new IllegalStateException("Stats.PLAY_TIME not found in Stats.CUSTOM");
-            }
-            //LOGGER.info("Successfully accessed Stats.PLAY_TIME");
+            this.deathStat = Stats.CUSTOM.get(Stats.DEATHS);
         } catch (Exception e) {
-            LOGGER.error("Failed to access Stats.PLAY_TIME", e);
-            throw new RuntimeException("Cannot initialize DailyPlaytimeTracker without Stats.PLAY_TIME", e);
+            LOGGER.error("Failed to access Stats.CUSTOM", e);
+            throw new RuntimeException("Cannot initialize DailyPlaytimeTracker without Stats.CUSTOM data", e);
         }
         setDailyResetTime("00:00:00 UTC"); // Default reset time, can be set externally
         loadData();
@@ -69,11 +76,13 @@ public class DailyStatsTracker {
     private void loadData() {
         DataSerializer.load(playtimeDataPath, dailyPlaytimes, resetScheduler, "daily_playtimes");
         DataSerializer.load(distanceDataPath, dailyDistances, resetScheduler, "daily_distances");
+        DataSerializer.load(deathsDataPath, dailyDeaths, resetScheduler, "daily_deaths");
     }
 
     private void saveData() {
         DataSerializer.save(playtimeDataPath, dailyPlaytimes, resetScheduler.getLastResetCheck(), "daily_playtimes");
         DataSerializer.save(distanceDataPath, dailyDistances, resetScheduler.getLastResetCheck(), "daily_distances");
+        DataSerializer.save(deathsDataPath, dailyDeaths, resetScheduler.getLastResetCheck(), "daily_deaths");
     }
 
     public void setDailyResetTime(String timeStr) {
@@ -86,6 +95,10 @@ public class DailyStatsTracker {
 
     public double getDailyDistance(UUID uuid) {
         return dailyDistances.getOrDefault(uuid, 0.0);
+    }
+
+    public static double getDailyDeaths(UUID uuid) {
+        return dailyDeaths.getOrDefault(uuid, 0.0);
     }
 
     public void updatePlayerDistance(ServerPlayer player) {
@@ -112,6 +125,19 @@ public class DailyStatsTracker {
         resetScheduler.checkReset();
     }
 
+    public void updatePlayerDeaths(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        double currentDeaths = player.getStats().getValue(deathStat);
+        double lastDeaths = deathsLastKnownTicks.getOrDefault(uuid, currentDeaths);
+
+        double deathsIncrement = currentDeaths - lastDeaths;
+        dailyDeaths.merge(uuid, deathsIncrement, Double::sum);
+        deathsLastKnownTicks.put(uuid, currentDeaths);
+
+        resetScheduler.checkReset();
+        saveData();
+    }
+
     public void playerLoggedIn(ServerPlayer player) {
         UUID uuid = player.getUUID();
         long currentTicks = player.getStats().getValue(playTimeStat);
@@ -121,11 +147,16 @@ public class DailyStatsTracker {
         double currentDistanceCm = calculatePlayerDistance(player);
         distanceLastKnownTicks.put(uuid, (long) currentDistanceCm);
         dailyDistances.putIfAbsent(uuid, 0.0);
+
+        double currentDeaths = player.getStats().getValue(deathStat);
+        deathsLastKnownTicks.put(uuid, currentDeaths);
+        dailyDeaths.putIfAbsent(uuid, 0.0);
     }
 
     public void playerLoggedOut(ServerPlayer player) {
         updatePlayerDistance(player);
         updatePlayerPlaytime(player);
+        //updatePlayerDeaths(player);
         saveData();
     }
 
@@ -143,6 +174,10 @@ public class DailyStatsTracker {
         int km = (int) (totalMeters / 1000);
         int m = (int) (totalMeters % 1000);
         return String.format("%dkm %dm today", km, m);
+    }
+
+    public static String formatDailyDeaths(UUID uuid) {
+        return String.format("%d deaths today", (int) getDailyDeaths(uuid));
     }
 
     private static class ResetScheduler {
@@ -181,9 +216,10 @@ public class DailyStatsTracker {
             ZonedDateTime todayReset = ZonedDateTime.of(today, resetTime, ZoneId.of("UTC"));
 
             if (currentZdt.isAfter(todayReset) && lastCheckZdt.isBefore(todayReset)) {
-                LOGGER.info("Resetting daily distance at {}", currentZdt);
+                LOGGER.info("Resetting daily stats at {}", currentZdt);
                 tracker.dailyDistances.replaceAll((uuid, v) -> 0.0);
                 tracker.dailyPlaytimes.replaceAll((uuid, v) -> 0.0);
+                dailyDeaths.replaceAll((uuid, v) -> 0.0);
                 /* more stats here */
                 tracker.saveData();
             }
@@ -191,9 +227,10 @@ public class DailyStatsTracker {
             if (!currentZdt.toLocalDate().equals(lastCheckZdt.toLocalDate())) {
                 ZonedDateTime tomorrowReset = todayReset.plusDays(1);
                 if (currentZdt.isAfter(tomorrowReset) && lastCheckZdt.isBefore(tomorrowReset)) {
-                    LOGGER.info("Resetting daily distance at {}", currentZdt);
+                    LOGGER.info("Resetting daily stats at {}", currentZdt);
                     tracker.dailyDistances.replaceAll((uuid, v) -> 0.0);
                     tracker.dailyPlaytimes.replaceAll((uuid, v) -> 0.0);
+                    dailyDeaths.replaceAll((uuid, v) -> 0.0);
                     /* more stats here */
                     tracker.saveData();
                 }

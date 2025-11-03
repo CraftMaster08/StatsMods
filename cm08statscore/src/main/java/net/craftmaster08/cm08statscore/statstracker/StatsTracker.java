@@ -23,11 +23,14 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static net.minecraft.stats.Stats.DEATHS;
+
 public class StatsTracker {
     private static final int UInt32Limit = 2147483647;
     private static final Logger LOGGER = LogManager.getLogger(StatsTracker.class);
     public record PlayerDistance(String username, double distanceKm, UUID uuid) {}
     public record PlayerPlaytime(String username, double playtime, UUID uuid) {}
+    public record PlayerDeaths(String username, int deaths, UUID uuid) {}
 
     // Stat names for offline player lookup and logging
     private static final String[] OFFLINE_DISTANCE_STATS = {
@@ -79,6 +82,14 @@ public class StatsTracker {
                 .toList();
     }
 
+    public static List<PlayerDeaths> getOverallDeaths(MinecraftServer server) {
+        return Stream.concat(
+                        getOnlineDeaths(server).stream(),
+                        getOfflineDeaths(server).stream()
+                ).sorted(Comparator.comparingInt(PlayerDeaths::deaths).reversed())
+                .toList();
+    }
+
     private static List<PlayerDistance> getOnlineDistances(MinecraftServer server) {
         return server.getPlayerList().getPlayers().stream()
                 .map(player -> {
@@ -98,6 +109,16 @@ public class StatsTracker {
                 .map(player -> new PlayerPlaytime(
                         player.getName().getString(),
                         player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME)) / 20.0 / 3600.0,
+                        player.getUUID()
+                ))
+                .toList();
+    }
+
+    private static List<PlayerDeaths> getOnlineDeaths(MinecraftServer server) {
+        return server.getPlayerList().getPlayers().stream()
+                .map(player -> new PlayerDeaths(
+                        player.getName().getString(),
+                        player.getStats().getValue(Stats.CUSTOM.get(DEATHS)),
                         player.getUUID()
                 ))
                 .toList();
@@ -207,6 +228,56 @@ public class StatsTracker {
         }
 
         return playtimes;
+    }
+
+    private static List<PlayerDeaths> getOfflineDeaths(MinecraftServer server) {
+        List<PlayerDeaths> deaths = new ArrayList<>();
+        File statsFolder = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
+        if (!statsFolder.exists() || !statsFolder.isDirectory()) {
+            return deaths;
+        }
+
+        File[] statFiles = statsFolder.listFiles((dir, name) -> name.endsWith(".json"));
+        if (statFiles == null) {
+            return deaths;
+        }
+
+        Set<UUID> onlineUUIDs = server.getPlayerList().getPlayers().stream()
+                .map(ServerPlayer::getUUID)
+                .collect(Collectors.toSet());
+
+        for (File statFile : statFiles) {
+            try {
+                String uuidString = statFile.getName().replace(".json", "");
+                UUID uuid = UUID.fromString(uuidString);
+
+                if (onlineUUIDs.contains(uuid)) {
+                    continue;
+                }
+
+                JsonObject statsJson;
+                try (FileReader reader = new FileReader(statFile)) {
+                    statsJson = JsonParser.parseReader(reader).getAsJsonObject();
+                }
+
+                JsonObject stats = statsJson.getAsJsonObject("stats");
+                if (stats != null) {
+                    JsonObject custom = stats.getAsJsonObject("minecraft:custom");
+                    if (custom != null) {
+                        JsonElement deathElement = custom.get("minecraft:deaths");
+                        if (deathElement != null) {
+                            int deathsCount = deathElement.getAsInt();
+                            String username = UsernameResolver.resolve(server, uuid, uuidString);
+                            deaths.add(new PlayerDeaths(username, deathsCount, uuid));
+                        }
+                    }
+                }
+            } catch (IOException | IllegalArgumentException e) {
+                LOGGER.error("Error reading stat file {}: {}", statFile.getName(), e.getMessage());
+            }
+        }
+
+        return deaths;
     }
 
     private interface UsernameResolver {

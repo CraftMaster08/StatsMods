@@ -5,9 +5,12 @@ import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.PlayerList;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -73,6 +76,10 @@ public class StatsCore {
                 dailyStatsTracker.playerLoggedOut(player);
             }
         }
+    }
+
+    public static PlayerList getPlayerList() {
+        return server.getPlayerList();
     }
 
     private static class ServiceInitializer {
