@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.cache.UsernameCache;
+import net.craftmaster08.cm08statscore.ranking.StatsEntry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
@@ -28,9 +29,9 @@ import static net.minecraft.stats.Stats.DEATHS;
 public class StatsTracker {
     private static final int UInt32Limit = 2147483647;
     private static final Logger LOGGER = LogManager.getLogger(StatsTracker.class);
-    public record PlayerDistance(String username, double distanceKm, UUID uuid) {}
-    public record PlayerPlaytime(String username, double playtime, UUID uuid) {}
-    public record PlayerDeaths(String username, int deaths, UUID uuid) {}
+    public record PlayerDistance(String username, double distanceKm, UUID uuid) implements StatsEntry {}
+    public record PlayerPlaytime(String username, double playtime, UUID uuid) implements StatsEntry{}
+    public record PlayerDeaths(String username, int deaths, UUID uuid) implements StatsEntry{}
 
     // Stat names for offline player lookup and logging
     private static final String[] OFFLINE_DISTANCE_STATS = {
@@ -39,6 +40,11 @@ public class StatsTracker {
             "minecraft:walk_under_water_one_cm", "minecraft:minecart_one_cm", "minecraft:boat_one_cm", "minecraft:pig_one_cm",
             "minecraft:horse_one_cm", "minecraft:aviate_one_cm"
     };
+
+    @SuppressWarnings("unchecked")
+    public static <T extends StatsEntry> List<StatsEntry> asStatsList(List<T> list) {
+        return (List<StatsEntry>) list;
+    }
 
     public static double calculatePlayerDistance(ServerPlayer player) {
         double totalDistanceCm = 0.0;
@@ -88,6 +94,17 @@ public class StatsTracker {
                         getOfflineDeaths(server).stream()
                 ).sorted(Comparator.comparingInt(PlayerDeaths::deaths).reversed())
                 .toList();
+    }
+
+    public static String formatDistance(double distanceKm) {
+        if (distanceKm >= 1000.0) {
+            return String.format("%dkm", (int) distanceKm);
+        } else if (distanceKm >= 1.0) {
+            return String.format("%.2fkm", distanceKm);
+        } else {
+            double meters = distanceKm * 1000.0;
+            return String.format("%dm", (int) meters);
+        }
     }
 
     private static List<PlayerDistance> getOnlineDistances(MinecraftServer server) {

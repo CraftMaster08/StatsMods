@@ -1,4 +1,4 @@
-package net.craftmaster08.deathleaderboard;
+package net.craftmaster08.distanceleaderboard;
 
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.minecraft.server.MinecraftServer;
@@ -9,19 +9,20 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-@Mod(DeathLeaderboard.MODID)
-public class DeathLeaderboard {
-    public static final String MODID = "deathleaderboard";
-    private static final Logger LOGGER = LogManager.getLogger(DeathLeaderboard.class);
+@Mod(DistanceLeaderboard.MODID)
+public class DistanceLeaderboard {
+    public static final String MODID = "distanceleaderboard";
+    private static final Logger LOGGER = LogManager.getLogger(DistanceLeaderboard.class);
     private static MinecraftServer server;
+    private boolean commandsRegistered = false;
 
-    public DeathLeaderboard() {
+    public DistanceLeaderboard() {
         if (!isStatsCorePresent()) {
-            LOGGER.error("StatsCore mod (cm08statscore) is required but not detected. Disabling DeathLeaderboard.");
+            LOGGER.error("StatsCore mod (cm08statscore) is required but not detected. Disabling DistanceLeaderboard.");
             return;
         }
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, this::onServerStarting);
-        LOGGER.info("Initialized DeathLeaderboard mod");
+        LOGGER.info("Initialized DistanceLeaderboard mod");
     }
 
     private boolean isStatsCorePresent() {
@@ -32,15 +33,18 @@ public class DeathLeaderboard {
 
     private void onServerStarting(ServerStartingEvent event) {
         server = event.getServer();
-        LOGGER.info("DeathLeaderboard server set");
+        LOGGER.info("DistanceLeaderboard server set");
 
-        if (areDependenciesReady()) {
+        if (!commandsRegistered && areDependenciesReady()) {
             registerCommands(event.getServer().getCommands().getDispatcher());
-            LOGGER.info("Registered /deaths command during server starting");
-        } else {
-            LOGGER.warn("Cannot register /deaths command: Dependencies not fully initialized (ConfigManager: {}, DailyDeathTracker: {})",
+            commandsRegistered = true;
+            LOGGER.info("Registered /distance command during server starting");
+        } else if (!areDependenciesReady()) {
+            LOGGER.warn("Cannot register /distance command: Dependencies not fully initialized (ConfigManager: {}, DailyDistanceTracker: {})",
                     StatsCore.getConfigManager() != null ? "present" : "null",
                     StatsCore.getDailyStatsTracker() != null ? "present" : "null");
+        } else {
+            LOGGER.info("Skipping /distance command registration; already registered");
         }
     }
 
@@ -51,7 +55,7 @@ public class DeathLeaderboard {
     }
 
     private void registerCommands(com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> dispatcher) {
-        DeathRunCommand.register(dispatcher);
+        DistanceRunCommand.register(dispatcher);
     }
 
     public static MinecraftServer getServer() {
