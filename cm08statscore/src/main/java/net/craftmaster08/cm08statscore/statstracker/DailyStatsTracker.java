@@ -9,7 +9,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stat;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.level.storage.LevelResource;
-import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -26,8 +25,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import static net.craftmaster08.cm08statscore.statstracker.StatsTracker.calculatePlayerDistance;
-import static net.minecraft.stats.Stats.DEATHS;
-import static net.minecraft.stats.Stats.PLAY_TIME;
 
 public class DailyStatsTracker {
     private static final Logger LOGGER = LogManager.getLogger(DailyStatsTracker.class);
