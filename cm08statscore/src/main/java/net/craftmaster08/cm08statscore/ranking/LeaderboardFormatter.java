@@ -158,7 +158,6 @@ public class LeaderboardFormatter {
     }
 
     private MutableComponent formatPlaytimeStat(StatsEntry entry, PodiumRank rank) {
-        LOGGER.info("entered playtime if");
         var p = (StatsTracker.PlayerPlaytime) entry;
 
         String hoverText;
@@ -173,9 +172,6 @@ public class LeaderboardFormatter {
                 .withStyle(s -> s.withHoverEvent(
                         new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText))
                 ));
-
-        LOGGER.info("valueText: {}", valueText);
-
 
         if (p.playtime() >= 100.0) {
             double days = p.playtime() / 24.0;
