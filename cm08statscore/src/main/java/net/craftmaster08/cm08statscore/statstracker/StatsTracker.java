@@ -286,6 +286,8 @@ public class StatsTracker {
                             int deathsCount = deathElement.getAsInt();
                             String username = UsernameResolver.resolve(server, uuid, uuidString);
                             deaths.add(new PlayerDeaths(username, deathsCount, uuid));
+                        } else {
+                            deaths.add(new PlayerDeaths(UsernameResolver.resolve(server, uuid, uuidString), 0, uuid));
                         }
                     }
                 }

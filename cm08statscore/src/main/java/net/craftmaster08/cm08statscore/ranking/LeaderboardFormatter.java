@@ -111,7 +111,7 @@ public class LeaderboardFormatter {
         String singularPlural = d.deaths() == 1 ? "Death" : "Deaths";
 
         double playtime = playtimeMap.getOrDefault(entry.uuid(), 0.0);
-        double ratio = (playtime > 0.0 && d.deaths() >= 1) ? playtime / d.deaths() : 0.0;
+        double ratio = (playtime > 0.0 && d.deaths() >= 1) ? playtime / d.deaths() : playtime;
 
         String hoverText;
         if (dailyStatsTracker != null) {
