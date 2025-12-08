@@ -22,7 +22,7 @@ public class LeaderboardFormatter {
     private static final int BASE_PADDING = 16;
     private static final int BASE_BORDER_LENGTH = 42;
 
-    private final List<StatsEntry> entries;
+    private final List<StatsTracker.StatsEntry> entries;
     private final Set<String> blacklistedPlayers;
     private final Map<String, ChatFormatting> usernameColors;
     private final DailyStatsTracker dailyStatsTracker;
@@ -33,7 +33,7 @@ public class LeaderboardFormatter {
 
 
     public LeaderboardFormatter(
-            List<StatsEntry> entries,
+            List<StatsTracker.StatsEntry> entries,
             StatsType type,
             Set<String> blacklistedPlayers,
             Map<String, ChatFormatting> usernameColors,
@@ -58,7 +58,7 @@ public class LeaderboardFormatter {
 
     public void displayLeaderboard(CommandSourceStack source, ChatFormatting borderColor, ChatFormatting titleColor, StatsType type) {
         // Filter out blacklisted players
-        List<StatsEntry> filteredStats = entries.stream()
+        List<StatsTracker.StatsEntry> filteredStats = entries.stream()
                 .filter(pt -> !blacklistedPlayers.contains(pt.username()))
                 .toList();
 
@@ -80,7 +80,7 @@ public class LeaderboardFormatter {
                 .withStyle(titleColor));
 
         for (int i = 0; i < filteredStats.size(); i++) {
-            formatPlayerEntry(source, filteredStats.get(i), i + 1, totalPadding);
+            formatPlayerEntry(source, filteredStats.get(i),i + 1, totalPadding);
             if (i == 2 && filteredStats.size() > 3) {
                 source.sendSystemMessage(Component.literal(""));
             }
@@ -89,14 +89,14 @@ public class LeaderboardFormatter {
         source.sendSystemMessage(borderComponent);
     }
 
-    private int calculateMaxUsernameLength(List<StatsEntry> entries) {
+    private int calculateMaxUsernameLength(List<StatsTracker.StatsEntry> entries) {
         return entries.stream()
                 .map(pt -> pt.username().length())
                 .max(Integer::compareTo)
                 .orElse(0);
     }
 
-    private MutableComponent formatUsername(StatsEntry pt, int totalPadding) {
+    private MutableComponent formatUsername(StatsTracker.StatsEntry pt, int totalPadding) {
         String username = pt.username();
         String paddedUsername = username + ": " + " ".repeat(Math.max(0, totalPadding - username.length()));
         ChatFormatting usernameColor = usernameColors.getOrDefault(pt.username(), ChatFormatting.WHITE);
@@ -105,13 +105,11 @@ public class LeaderboardFormatter {
                 .withStyle(Style.EMPTY.withColor(usernameColor).withBold(false));
     }
 
-    private MutableComponent formatDeathStat(StatsEntry entry, PodiumRank rank) {
-        var d = (StatsTracker.PlayerDeaths) entry;
-
-        String singularPlural = d.deaths() == 1 ? "Death" : "Deaths";
+    private MutableComponent formatDeathStat(StatsTracker.StatsEntry entry, PodiumRank rank) {
+        String singularPlural = entry.stat() == 1 ? "Death" : "Deaths";
 
         double playtime = playtimeMap.getOrDefault(entry.uuid(), 0.0);
-        double ratio = (playtime > 0.0 && d.deaths() >= 1) ? playtime / d.deaths() : playtime;
+        double ratio = (playtime > 0.0 && entry.stat() >= 1) ? playtime / entry.stat() : playtime;
 
         String hoverText;
         if (dailyStatsTracker != null) {
@@ -120,7 +118,7 @@ public class LeaderboardFormatter {
             hoverText = "N/A";
         }
 
-        MutableComponent baseComponent = Component.literal(String.format("%d %s", d.deaths(), singularPlural))
+        MutableComponent baseComponent = Component.literal(String.format("%d %s", (int) entry.stat(), singularPlural))
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.WHITE).withBold(false))
                 .withStyle(s -> s.withHoverEvent(
                         new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText))
@@ -138,9 +136,7 @@ public class LeaderboardFormatter {
         return valueText;
     }
 
-    private MutableComponent formatDistanceStat(StatsEntry entry) {
-        var d = (StatsTracker.PlayerDistance) entry;
-
+    private MutableComponent formatDistanceStat(StatsTracker.StatsEntry entry) {
         String hoverText;
         if (dailyStatsTracker != null) {
             double dailyDistanceCm = dailyStatsTracker.getDailyDistance(entry.uuid());
@@ -149,7 +145,7 @@ public class LeaderboardFormatter {
             hoverText = "N/A";
         }
 
-        MutableComponent base = Component.literal(StatsTracker.formatDistance(d.distanceKm()));
+        MutableComponent base = Component.literal(StatsTracker.formatDistance(entry.stat()));
         return base
                 .withStyle(ChatFormatting.WHITE)
                 .withStyle(s -> s.withHoverEvent(
@@ -157,9 +153,7 @@ public class LeaderboardFormatter {
                 ));
     }
 
-    private MutableComponent formatPlaytimeStat(StatsEntry entry, PodiumRank rank) {
-        var p = (StatsTracker.PlayerPlaytime) entry;
-
+    private MutableComponent formatPlaytimeStat(StatsTracker.StatsEntry entry, PodiumRank rank) {
         String hoverText;
         if (dailyStatsTracker != null) {
             double dailyHours = dailyStatsTracker.getDailyPlaytime(entry.uuid());
@@ -168,20 +162,20 @@ public class LeaderboardFormatter {
             hoverText = "N/A";
         }
 
-        MutableComponent valueText = HourRange.findRange(p.playtime()).formatHours(p.playtime())
+        MutableComponent valueText = HourRange.findRange(entry.stat()).formatHours(entry.stat())
                 .withStyle(s -> s.withHoverEvent(
                         new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText))
                 ));
 
-        if (p.playtime() >= 100.0) {
-            double days = p.playtime() / 24.0;
+        if (entry.stat() >= 100.0) {
+            double days = entry.stat() / 24.0;
             valueText = valueText.append(Component.literal(String.format("    (%.2fd)", days))
                     .withStyle(Style.EMPTY.withColor(rank.getColor()).withBold(true)));
         }
         return valueText;
     }
 
-    private void formatPlayerEntry(CommandSourceStack source, StatsEntry pt, int position, int totalPadding) {
+    private void formatPlayerEntry(CommandSourceStack source, StatsTracker.StatsEntry pt, int position, int totalPadding) {
         PodiumRank rank = PodiumRank.fromPosition(position);
         MutableComponent message = rank.formatRank();
         if (rank != PodiumRank.NONE) {

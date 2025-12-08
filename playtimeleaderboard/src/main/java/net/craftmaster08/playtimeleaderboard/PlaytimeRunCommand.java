@@ -59,7 +59,7 @@ public class PlaytimeRunCommand {
                 LOGGER.warn("DailyPlaytimeTracker unavailable; daily playtime hover text disabled");
             }
 
-            List<StatsTracker.PlayerPlaytime> playtimes = fetchPlaytimes();
+            List<StatsTracker.StatsEntry> playtimes = fetchPlaytimes();
             if (playtimes == null) {
                 return 0;
             }
@@ -70,7 +70,7 @@ public class PlaytimeRunCommand {
             }
 
             LeaderboardFormatter formatter = new LeaderboardFormatter(
-                    StatsTracker.asStatsList(playtimes),
+                    playtimes,
                     LeaderboardFormatter.StatsType.PLAYTIME,
                     config.getBlacklistedPlayers(),
                     config.getUsernameColors(),
@@ -81,9 +81,9 @@ public class PlaytimeRunCommand {
             return 1;
         }
 
-        private List<StatsTracker.PlayerPlaytime> fetchPlaytimes() {
+        private List<StatsTracker.StatsEntry> fetchPlaytimes() {
             try {
-                return StatsTracker.getOverallPlaytime(server);
+                return StatsTracker.getOverallStats(server, LeaderboardFormatter.StatsType.PLAYTIME);
             } catch (Exception e) {
                 sendError("Failed to retrieve playtime data: " + e.getMessage());
                 LOGGER.error("Failed to retrieve playtime data", e);

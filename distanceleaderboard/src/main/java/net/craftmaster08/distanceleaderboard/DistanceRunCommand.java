@@ -59,7 +59,7 @@ public class DistanceRunCommand {
                 sendError("DailyDistanceTracker unavailable; daily distance hover text disabled");
             }
 
-            List<StatsTracker.PlayerDistance> distances = fetchDistances();
+            List<StatsTracker.StatsEntry> distances = fetchDistances();
             if (distances == null) {
                 return 0;
             }
@@ -70,7 +70,7 @@ public class DistanceRunCommand {
             }
 
             LeaderboardFormatter formatter = new LeaderboardFormatter(
-                    StatsTracker.asStatsList(distances),
+                    distances,
                     LeaderboardFormatter.StatsType.DISTANCE,
                     config.getBlacklistedPlayers(),
                     config.getUsernameColors(),
@@ -81,9 +81,9 @@ public class DistanceRunCommand {
             return 1;
         }
 
-        private List<StatsTracker.PlayerDistance> fetchDistances() {
+        private List<StatsTracker.StatsEntry> fetchDistances() {
             try {
-                return StatsTracker.getOverallDistance(server);
+                return StatsTracker.getOverallStats(server, LeaderboardFormatter.StatsType.DISTANCE);
             } catch (Exception e) {
                 sendError("Failed to retrieve distance data: " + e.getMessage());
                 LOGGER.error("Failed to retrieve distance data", e);

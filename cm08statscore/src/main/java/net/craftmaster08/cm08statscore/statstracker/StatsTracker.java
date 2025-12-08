@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.cache.UsernameCache;
-import net.craftmaster08.cm08statscore.ranking.StatsEntry;
+import net.craftmaster08.cm08statscore.ranking.LeaderboardFormatter;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
@@ -29,11 +29,8 @@ import static net.minecraft.stats.Stats.DEATHS;
 public class StatsTracker {
     private static final int UInt32Limit = 2147483647;
     private static final Logger LOGGER = LogManager.getLogger(StatsTracker.class);
-    public record PlayerDistance(String username, double distanceKm, UUID uuid) implements StatsEntry {}
-    public record PlayerPlaytime(String username, double playtime, UUID uuid) implements StatsEntry{}
-    public record PlayerDeaths(String username, int deaths, UUID uuid) implements StatsEntry{}
+    public record StatsEntry(String username, double stat, UUID uuid) {}
 
-    // Stat names for offline player lookup and logging
     private static final String[] OFFLINE_DISTANCE_STATS = {
             "minecraft:walk_one_cm", "minecraft:sprint_one_cm", "minecraft:crouch_one_cm", "minecraft:swim_one_cm",
             "minecraft:fall_one_cm", "minecraft:climb_one_cm", "minecraft:fly_one_cm", "minecraft:walk_on_water_one_cm",
@@ -41,9 +38,12 @@ public class StatsTracker {
             "minecraft:horse_one_cm", "minecraft:aviate_one_cm"
     };
 
-    @SuppressWarnings("unchecked")
-    public static <T extends StatsEntry> List<StatsEntry> asStatsList(List<T> list) {
-        return (List<StatsEntry>) list;
+    static String getStatIdFromType(LeaderboardFormatter.StatsType type) {
+        return switch (type) {
+            case PLAYTIME -> "play_time";
+            case DISTANCE -> null;
+            case DEATHS -> "deaths";
+        };
     }
 
     public static double calculatePlayerDistance(ServerPlayer player) {
@@ -72,28 +72,131 @@ public class StatsTracker {
         return totalDistanceCm;
     }
 
-    public static List<PlayerDistance> getOverallDistance(MinecraftServer server) {
-        return Stream.concat(
-                        getOnlineDistances(server).stream(),
-                        getOfflineDistances(server).stream()
-                ).sorted(Comparator.comparingDouble(PlayerDistance::distanceKm).reversed())
+    public static List<StatsEntry> getOverallStats(MinecraftServer server, LeaderboardFormatter.StatsType type) {
+        List<StatsEntry> online = getOnlineStats(server, type);
+        List<StatsEntry> offline = getOfflineStats(server, type);
+
+        LOGGER.debug("Combining stats for {}: {} online, {} offline players", type, online.size(), offline.size());
+
+        return Stream.concat(online.stream(), offline.stream())
+                .sorted(Comparator.comparingDouble(StatsEntry::stat).reversed())
                 .toList();
     }
 
-    public static List<PlayerPlaytime> getOverallPlaytime(MinecraftServer server) {
-        return Stream.concat(
-                        getOnlinePlaytimes(server).stream(),
-                        getOfflinePlaytimes(server).stream()
-                ).sorted(Comparator.comparingDouble(PlayerPlaytime::playtime).reversed())
+    public static List<StatsEntry> getOnlineStats(MinecraftServer server, LeaderboardFormatter.StatsType type) {
+        List<StatsEntry> entries = new ArrayList<>();
+
+        switch (type) {
+            case PLAYTIME -> entries = server.getPlayerList().getPlayers().stream()
+                    .map(player -> new StatsEntry(
+                            player.getName().getString(),
+                            player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME)) / 20.0 / 3600.0,
+                            player.getUUID()
+                    ))
+                    .toList();
+
+            case DISTANCE -> entries = server.getPlayerList().getPlayers().stream()
+                    .map(player -> {
+                        double totalDistanceCm = calculatePlayerDistance(player);
+                        double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
+                        return new StatsEntry(
+                                player.getName().getString(),
+                                distanceKm,
+                                player.getUUID()
+                        );
+                    })
+                    .toList();
+
+            case DEATHS -> entries = server.getPlayerList().getPlayers().stream()
+                .map(player -> new StatsEntry(
+                        player.getName().getString(),
+                        player.getStats().getValue(Stats.CUSTOM.get(DEATHS)),
+                        player.getUUID()
+                ))
                 .toList();
+        }
+        return entries;
     }
 
-    public static List<PlayerDeaths> getOverallDeaths(MinecraftServer server) {
-        return Stream.concat(
-                        getOnlineDeaths(server).stream(),
-                        getOfflineDeaths(server).stream()
-                ).sorted(Comparator.comparingInt(PlayerDeaths::deaths).reversed())
-                .toList();
+    public static List<StatsEntry> getOfflineStats(MinecraftServer server, LeaderboardFormatter.StatsType type) {
+        List<StatsEntry> entries = new ArrayList<>();
+
+        File statsFolder = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
+        if (!fileExists(statsFolder)) {
+            return entries;
+        }
+
+        File[] statFiles = statsFolder.listFiles((dir, name) -> name.endsWith(".json"));
+        if (statFiles == null) {
+            return entries;
+        }
+
+        Set<UUID> onlineUUIDs = server.getPlayerList().getPlayers().stream()
+                .map(ServerPlayer::getUUID)
+                .collect(Collectors.toSet());
+
+        for (File statFile : statFiles) {
+            try {
+                String uuidString = statFile.getName().replace(".json", "");
+                UUID uuid = UUID.fromString(uuidString);
+
+                if (onlineUUIDs.contains(uuid)) {
+                    continue;
+                }
+
+                JsonObject statsJson;
+                try (FileReader reader = new FileReader(statFile)) {
+                    statsJson = JsonParser.parseReader(reader).getAsJsonObject();
+                }
+
+                JsonObject stats = statsJson.getAsJsonObject("stats");
+                if (stats != null) {
+                    JsonObject custom = stats.getAsJsonObject("minecraft:custom");
+                    if (custom != null) {
+                        switch (type) {
+                            case PLAYTIME -> {
+                                JsonElement playTimeElement = custom.get("minecraft:%s".formatted(getStatIdFromType(LeaderboardFormatter.StatsType.PLAYTIME)));
+                                if (playTimeElement != null) {
+                                    double hours = playTimeElement.getAsLong() / 20.0 / 3600.0;
+                                    String username = UsernameResolver.resolve(server, uuid, uuidString);
+                                    entries.add(new StatsEntry(username, hours, uuid));
+                                }
+                            }
+
+                            case DISTANCE -> {
+                                double totalDistanceCm = 0.0;
+                                for (String stat : OFFLINE_DISTANCE_STATS) {
+                                    JsonElement element = custom.get(stat);
+                                    if (element != null) {
+                                        totalDistanceCm += element.getAsLong();
+                                    }
+                                }
+                                String username = UsernameResolver.resolve(server, uuid, uuidString);
+                                int intLimitCount = StatsCore.getConfigManager().getIntLimits().getOrDefault(username, 0);
+                                totalDistanceCm += (double) intLimitCount * UInt32Limit;
+                                double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
+                                entries.add(new StatsEntry(username, distanceKm, uuid));
+                            }
+
+                            case DEATHS -> {
+                                JsonElement deathElement = custom.get(String.format("minecraft:%s", getStatIdFromType(LeaderboardFormatter.StatsType.DEATHS)));
+                                if (deathElement != null) {
+                                    int deathsCount = deathElement.getAsInt();
+                                    String username = UsernameResolver.resolve(server, uuid, uuidString);
+                                    LOGGER.debug("death count for player {} is {}", username, deathsCount);
+                                    entries.add(new StatsEntry(username, deathsCount, uuid));
+                                } else {
+                                    entries.add(new StatsEntry(UsernameResolver.resolve(server, uuid, uuidString), 0, uuid));
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (IOException | IllegalArgumentException e) {
+                LOGGER.error("Error reading stat file {}: {}", statFile.getName(), e.getMessage());
+            }
+        }
+        return entries;
     }
 
     public static String formatDistance(double distanceKm) {
@@ -107,196 +210,8 @@ public class StatsTracker {
         }
     }
 
-    private static List<PlayerDistance> getOnlineDistances(MinecraftServer server) {
-        return server.getPlayerList().getPlayers().stream()
-                .map(player -> {
-                    double totalDistanceCm = calculatePlayerDistance(player);
-                    double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
-                    return new PlayerDistance(
-                            player.getName().getString(),
-                            distanceKm,
-                            player.getUUID()
-                    );
-                })
-                .toList();
-    }
-
-    private static List<PlayerPlaytime> getOnlinePlaytimes(MinecraftServer server) {
-        return server.getPlayerList().getPlayers().stream()
-                .map(player -> new PlayerPlaytime(
-                        player.getName().getString(),
-                        player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME)) / 20.0 / 3600.0,
-                        player.getUUID()
-                ))
-                .toList();
-    }
-
-    private static List<PlayerDeaths> getOnlineDeaths(MinecraftServer server) {
-        return server.getPlayerList().getPlayers().stream()
-                .map(player -> new PlayerDeaths(
-                        player.getName().getString(),
-                        player.getStats().getValue(Stats.CUSTOM.get(DEATHS)),
-                        player.getUUID()
-                ))
-                .toList();
-    }
-
-    private static List<PlayerDistance> getOfflineDistances(MinecraftServer server) {
-        List<PlayerDistance> distances = new ArrayList<>();
-        File statsFolder = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
-        if (!statsFolder.exists() || !statsFolder.isDirectory()) {
-            return distances;
-        }
-
-        File[] statFiles = statsFolder.listFiles((dir, name) -> name.endsWith(".json"));
-        if (statFiles == null) {
-            return distances;
-        }
-
-        Set<UUID> onlineUUIDs = server.getPlayerList().getPlayers().stream()
-                .map(ServerPlayer::getUUID)
-                .collect(Collectors.toSet());
-
-        for (File statFile : statFiles) {
-            try {
-                String uuidString = statFile.getName().replace(".json", "");
-                UUID uuid = UUID.fromString(uuidString);
-
-                if (onlineUUIDs.contains(uuid)) {
-                    continue;
-                }
-
-                JsonObject statsJson;
-                try (FileReader reader = new FileReader(statFile)) {
-                    statsJson = JsonParser.parseReader(reader).getAsJsonObject();
-                }
-
-                JsonObject stats = statsJson.getAsJsonObject("stats");
-                if (stats != null) {
-                    JsonObject custom = stats.getAsJsonObject("minecraft:custom");
-                    if (custom != null) {
-                        double totalDistanceCm = 0.0;
-                        for (String stat : OFFLINE_DISTANCE_STATS) {
-                            JsonElement element = custom.get(stat);
-                            if (element != null) {
-                                totalDistanceCm += element.getAsLong();
-                            }
-                        }
-                        String username = UsernameResolver.resolve(server, uuid, uuidString);
-                        int intLimitCount = StatsCore.getConfigManager().getIntLimits().getOrDefault(username, 0);
-                        totalDistanceCm += (double) intLimitCount * UInt32Limit;
-                        double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
-                        distances.add(new PlayerDistance(username, distanceKm, uuid));
-                    }
-                }
-            } catch (IOException | IllegalArgumentException e) {
-                LOGGER.error("Error reading stat file {}: {}", statFile.getName(), e.getMessage());
-            }
-        }
-
-        return distances;
-    }
-
-    private static List<PlayerPlaytime> getOfflinePlaytimes(MinecraftServer server) {
-        List<PlayerPlaytime> playtimes = new ArrayList<>();
-        File statsFolder = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
-        if (!statsFolder.exists() || !statsFolder.isDirectory()) {
-            return playtimes;
-        }
-
-        File[] statFiles = statsFolder.listFiles((dir, name) -> name.endsWith(".json"));
-        if (statFiles == null) {
-            return playtimes;
-        }
-
-        Set<UUID> onlineUUIDs = server.getPlayerList().getPlayers().stream()
-                .map(ServerPlayer::getUUID)
-                .collect(Collectors.toSet());
-
-        for (File statFile : statFiles) {
-            try {
-                String uuidString = statFile.getName().replace(".json", "");
-                UUID uuid = UUID.fromString(uuidString);
-
-                if (onlineUUIDs.contains(uuid)) {
-                    continue;
-                }
-
-                JsonObject statsJson;
-                try (FileReader reader = new FileReader(statFile)) {
-                    statsJson = JsonParser.parseReader(reader).getAsJsonObject();
-                }
-
-                JsonObject stats = statsJson.getAsJsonObject("stats");
-                if (stats != null) {
-                    JsonObject custom = stats.getAsJsonObject("minecraft:custom");
-                    if (custom != null) {
-                        JsonElement playTimeElement = custom.get("minecraft:play_time");
-                        if (playTimeElement != null) {
-                            double hours = playTimeElement.getAsLong() / 20.0 / 3600.0;
-                            String username = UsernameResolver.resolve(server, uuid, uuidString);
-                            playtimes.add(new PlayerPlaytime(username, hours, uuid));
-                        }
-                    }
-                }
-            } catch (IOException | IllegalArgumentException e) {
-                LOGGER.error("Error reading stat file {}: {}", statFile.getName(), e.getMessage());
-            }
-        }
-
-        return playtimes;
-    }
-
-    private static List<PlayerDeaths> getOfflineDeaths(MinecraftServer server) {
-        List<PlayerDeaths> deaths = new ArrayList<>();
-        File statsFolder = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
-        if (!statsFolder.exists() || !statsFolder.isDirectory()) {
-            return deaths;
-        }
-
-        File[] statFiles = statsFolder.listFiles((dir, name) -> name.endsWith(".json"));
-        if (statFiles == null) {
-            return deaths;
-        }
-
-        Set<UUID> onlineUUIDs = server.getPlayerList().getPlayers().stream()
-                .map(ServerPlayer::getUUID)
-                .collect(Collectors.toSet());
-
-        for (File statFile : statFiles) {
-            try {
-                String uuidString = statFile.getName().replace(".json", "");
-                UUID uuid = UUID.fromString(uuidString);
-
-                if (onlineUUIDs.contains(uuid)) {
-                    continue;
-                }
-
-                JsonObject statsJson;
-                try (FileReader reader = new FileReader(statFile)) {
-                    statsJson = JsonParser.parseReader(reader).getAsJsonObject();
-                }
-
-                JsonObject stats = statsJson.getAsJsonObject("stats");
-                if (stats != null) {
-                    JsonObject custom = stats.getAsJsonObject("minecraft:custom");
-                    if (custom != null) {
-                        JsonElement deathElement = custom.get("minecraft:deaths");
-                        if (deathElement != null) {
-                            int deathsCount = deathElement.getAsInt();
-                            String username = UsernameResolver.resolve(server, uuid, uuidString);
-                            deaths.add(new PlayerDeaths(username, deathsCount, uuid));
-                        } else {
-                            deaths.add(new PlayerDeaths(UsernameResolver.resolve(server, uuid, uuidString), 0, uuid));
-                        }
-                    }
-                }
-            } catch (IOException | IllegalArgumentException e) {
-                LOGGER.error("Error reading stat file {}: {}", statFile.getName(), e.getMessage());
-            }
-        }
-
-        return deaths;
+    public static boolean fileExists(File statsFolder) {
+        return statsFolder.exists() && statsFolder.isDirectory();
     }
 
     private interface UsernameResolver {

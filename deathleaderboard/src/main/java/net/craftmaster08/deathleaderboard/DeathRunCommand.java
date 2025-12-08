@@ -64,7 +64,7 @@ public class DeathRunCommand {
                 sendError("DailyStatsTracker unavailable; daily deaths hover text disabled");
             }
 
-            List<StatsTracker.PlayerDeaths> deaths = fetchDeaths();
+            List<StatsTracker.StatsEntry> deaths = fetchDeaths();
             if (deaths == null) {
                 return 0;
             }
@@ -74,16 +74,17 @@ public class DeathRunCommand {
                 return 1;
             }
 
-            List<StatsTracker.PlayerPlaytime> playtimes = fetchPlaytimes();
+            List<StatsTracker.StatsEntry> playtimes = fetchPlaytimes();
             if (playtimes == null) {
                 return 0;
             }
 
+
             Map<UUID, Double> playtimeMap = playtimes.stream()
-                    .collect(Collectors.toMap(StatsTracker.PlayerPlaytime::uuid, StatsTracker.PlayerPlaytime::playtime));
+                    .collect(Collectors.toMap(StatsTracker.StatsEntry::uuid, StatsTracker.StatsEntry::stat));
 
             LeaderboardFormatter formatter = new LeaderboardFormatter(
-                    StatsTracker.asStatsList(deaths),
+                    deaths,
                     LeaderboardFormatter.StatsType.DEATHS,
                     config.getBlacklistedPlayers(),
                     config.getUsernameColors(),
@@ -94,7 +95,7 @@ public class DeathRunCommand {
             return 1;
         }
 
-        private List<StatsTracker.PlayerDeaths> fetchDeaths() {
+        private List<StatsTracker.StatsEntry> fetchDeaths() {
             try {
                 // refresh daily deaths
                 PlayerList serverPlayers = StatsCore.getPlayerList();
@@ -102,7 +103,7 @@ public class DeathRunCommand {
                     dailyStatsTracker.updatePlayerDeaths(player);
                 }
 
-                return StatsTracker.getOverallDeaths(server);
+                return StatsTracker.getOverallStats(server, LeaderboardFormatter.StatsType.DEATHS);
             } catch (Exception e) {
                 sendError("Failed to retrieve deaths data: " + e.getMessage());
                 LOGGER.error("Failed to retrieve deaths data", e);
@@ -110,9 +111,9 @@ public class DeathRunCommand {
             }
         }
 
-        private List<StatsTracker.PlayerPlaytime> fetchPlaytimes() {
+        private List<StatsTracker.StatsEntry> fetchPlaytimes() {
             try {
-                return StatsTracker.getOverallPlaytime(server);
+                return StatsTracker.getOverallStats(server, LeaderboardFormatter.StatsType.PLAYTIME);
             } catch (Exception e) {
                 sendError("Failed to retrieve playtime data: " + e.getMessage());
                 LOGGER.error("Failed to retrieve playtime data", e);
