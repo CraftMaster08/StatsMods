@@ -76,8 +76,6 @@ public class StatsTracker {
         List<StatsEntry> online = getOnlineStats(server, type);
         List<StatsEntry> offline = getOfflineStats(server, type);
 
-        LOGGER.debug("Combining stats for {}: {} online, {} offline players", type, online.size(), offline.size());
-
         return Stream.concat(online.stream(), offline.stream())
                 .sorted(Comparator.comparingDouble(StatsEntry::stat).reversed())
                 .toList();
