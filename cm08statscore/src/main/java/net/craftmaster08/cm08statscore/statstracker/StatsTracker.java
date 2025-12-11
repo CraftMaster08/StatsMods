@@ -9,6 +9,7 @@ import net.craftmaster08.cm08statscore.ranking.LeaderboardFormatter;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.storage.LevelResource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static net.minecraft.stats.Stats.DEATHS;
+import static net.minecraft.stats.Stats.ENTITY_KILLED;
 
 public class StatsTracker {
     private static final int UInt32Limit = 2147483647;
@@ -43,6 +45,7 @@ public class StatsTracker {
             case PLAYTIME -> "play_time";
             case DISTANCE -> null;
             case DEATHS -> "deaths";
+            case KILLS -> "player_kills";
         };
     }
 
@@ -106,12 +109,20 @@ public class StatsTracker {
                     .toList();
 
             case DEATHS -> entries = server.getPlayerList().getPlayers().stream()
-                .map(player -> new StatsEntry(
-                        player.getName().getString(),
-                        player.getStats().getValue(Stats.CUSTOM.get(DEATHS)),
-                        player.getUUID()
-                ))
-                .toList();
+                    .map(player -> new StatsEntry(
+                            player.getName().getString(),
+                            player.getStats().getValue(Stats.CUSTOM.get(DEATHS)),
+                            player.getUUID()
+                    ))
+                    .toList();
+
+            case KILLS -> entries = server.getPlayerList().getPlayers().stream()
+                    .map(player -> new StatsEntry(
+                            player.getName().getString(),
+                            player.getStats().getValue(Stats.ENTITY_KILLED.get(EntityType.PLAYER)),
+                            player.getUUID()
+                    ))
+                    .toList();
         }
         return entries;
     }
@@ -181,8 +192,18 @@ public class StatsTracker {
                                 if (deathElement != null) {
                                     int deathsCount = deathElement.getAsInt();
                                     String username = UsernameResolver.resolve(server, uuid, uuidString);
-                                    LOGGER.debug("death count for player {} is {}", username, deathsCount);
                                     entries.add(new StatsEntry(username, deathsCount, uuid));
+                                } else {
+                                    entries.add(new StatsEntry(UsernameResolver.resolve(server, uuid, uuidString), 0, uuid));
+                                }
+                            }
+
+                            case KILLS -> {
+                                JsonElement killElement = custom.get(String.format("minecraft:%s", getStatIdFromType(LeaderboardFormatter.StatsType.KILLS)));
+                                if (killElement != null) {
+                                    int killsCount = killElement.getAsInt();
+                                    String username = UsernameResolver.resolve(server, uuid, uuidString);
+                                    entries.add(new StatsEntry(username, killsCount, uuid));
                                 } else {
                                     entries.add(new StatsEntry(UsernameResolver.resolve(server, uuid, uuidString), 0, uuid));
                                 }

@@ -29,7 +29,7 @@ public class LeaderboardFormatter {
     private final Map<UUID, Double> playtimeMap;
     private final StatsType type;
 
-    public enum StatsType {DEATHS, DISTANCE, PLAYTIME}
+    public enum StatsType {DEATHS, DISTANCE, PLAYTIME, KILLS}
 
 
     public LeaderboardFormatter(
@@ -51,8 +51,9 @@ public class LeaderboardFormatter {
     String getTitleFromType(StatsType type) {
         return switch (type) {
             case DEATHS -> "Deaths:";
-            case DISTANCE -> "Distance traveled: ";
-            case PLAYTIME -> "Playtime: ";
+            case DISTANCE -> "Distance traveled:";
+            case PLAYTIME -> "Playtime:";
+            case KILLS -> "PvP Kills:";
         };
     }
 
@@ -103,6 +104,27 @@ public class LeaderboardFormatter {
 
         return Component.literal(paddedUsername)
                 .withStyle(Style.EMPTY.withColor(usernameColor).withBold(false));
+    }
+
+    private MutableComponent formatKillStat(StatsTracker.StatsEntry entry, PodiumRank rank) {
+        String singularPlural = entry.stat() == 1 ? "Kill" : "Kills";
+
+        String hoverText;
+        if (dailyStatsTracker != null) {
+            hoverText = DailyStatsTracker.formatDailyKills(entry.uuid());
+        } else {
+            hoverText = "N/A";
+        }
+
+        MutableComponent baseComponent = Component.literal(String.format("%d %s", (int) entry.stat(), singularPlural))
+                .withStyle(Style.EMPTY.withColor(ChatFormatting.WHITE).withBold(false))
+                .withStyle(s -> s.withHoverEvent(
+                        new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText))
+                ));
+
+        MutableComponent valueText = Component.literal("");
+        valueText = valueText.append(baseComponent);
+        return valueText;
     }
 
     private MutableComponent formatDeathStat(StatsTracker.StatsEntry entry, PodiumRank rank) {
@@ -192,6 +214,9 @@ public class LeaderboardFormatter {
             case PLAYTIME -> message
                     .append(formatUsername(pt, totalPadding)
                     .append(formatPlaytimeStat(pt, rank)));
+            case KILLS -> message
+                    .append(formatUsername(pt, totalPadding)
+                    .append(formatKillStat(pt, rank)));
             default -> {
                 message = Component.literal("N/A");
                 LOGGER.error("Invalid StatsType");

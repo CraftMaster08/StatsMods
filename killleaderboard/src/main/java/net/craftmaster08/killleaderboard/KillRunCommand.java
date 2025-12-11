@@ -1,4 +1,4 @@
-package net.craftmaster08.deathleaderboard;
+package net.craftmaster08.killleaderboard;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -18,23 +18,20 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
-public class DeathRunCommand {
-    private static final Logger LOGGER = LogManager.getLogger(DeathRunCommand.class);
+public class KillRunCommand {
+    private static final Logger LOGGER = LogManager.getLogger(KillRunCommand.class);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("deaths")
+        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("kills")
                 .requires(source -> source.hasPermission(0))
                 .executes(context -> new LeaderboardExecutor(context.getSource()).execute());
 
         try {
             dispatcher.register(command);
-            LOGGER.info("Successfully registered /deaths command");
+            LOGGER.info("Successfully registered /kills command");
         } catch (Exception e) {
-            LOGGER.error("Failed to register /deaths command", e);
+            LOGGER.error("Failed to register /kills command", e);
         }
     }
 
@@ -46,7 +43,7 @@ public class DeathRunCommand {
 
         LeaderboardExecutor(CommandSourceStack source) {
             this.source = source;
-            this.server = DeathLeaderboard.getServer();
+            this.server = KillLeaderboard.getServer();
             this.config = StatsCore.getConfigManager();
             this.dailyStatsTracker = StatsCore.getDailyStatsTracker();
         }
@@ -61,61 +58,42 @@ public class DeathRunCommand {
                 return 0;
             }
             if (dailyStatsTracker == null) {
-                sendError("DailyStatsTracker unavailable; daily deaths hover text disabled");
+                sendError("DailyStatsTracker unavailable; daily kills hover text disabled");
             }
 
-            List<StatsTracker.StatsEntry> deaths = fetchDeaths();
-            if (deaths == null) {
+            List<StatsTracker.StatsEntry> kills = fetchKills();
+            if (kills == null) {
                 return 0;
             }
-            if (deaths.isEmpty()) {
-                source.sendSystemMessage(Component.literal("No deaths data available")
+            if (kills.isEmpty()) {
+                source.sendSystemMessage(Component.literal("No kills data available")
                         .withStyle(ChatFormatting.YELLOW));
                 return 1;
             }
 
-            List<StatsTracker.StatsEntry> playtimes = fetchPlaytimes();
-            if (playtimes == null) {
-                return 0;
-            }
-
-
-            Map<UUID, Double> playtimeMap = playtimes.stream()
-                    .collect(Collectors.toMap(StatsTracker.StatsEntry::uuid, StatsTracker.StatsEntry::stat));
-
             LeaderboardFormatter formatter = new LeaderboardFormatter(
-                    deaths,
-                    LeaderboardFormatter.StatsType.DEATHS,
+                    kills,
+                    LeaderboardFormatter.StatsType.KILLS,
                     config.getBlacklistedPlayers(),
                     config.getUsernameColors(),
                     dailyStatsTracker,
-                    playtimeMap
+                    null
             );
-            formatter.displayLeaderboard(source, ChatFormatting.BLACK, ChatFormatting.DARK_AQUA, LeaderboardFormatter.StatsType.DEATHS);
+            formatter.displayLeaderboard(source, ChatFormatting.DARK_RED, ChatFormatting.YELLOW, LeaderboardFormatter.StatsType.KILLS);
             return 1;
         }
 
-        private List<StatsTracker.StatsEntry> fetchDeaths() {
+        private List<StatsTracker.StatsEntry> fetchKills() {
             try {
-                // refresh daily deaths
+                // refresh daily kills
                 PlayerList serverPlayers = StatsCore.getPlayerList();
                 for (ServerPlayer player : serverPlayers.getPlayers()) {
-                    dailyStatsTracker.updatePlayerDeaths(player);
+                    dailyStatsTracker.updatePlayerKills(player);
                 }
-                return StatsTracker.getOverallStats(server, LeaderboardFormatter.StatsType.DEATHS);
+                return StatsTracker.getOverallStats(server, LeaderboardFormatter.StatsType.KILLS);
             } catch (Exception e) {
-                sendError("Failed to retrieve deaths data: " + e.getMessage());
-                LOGGER.error("Failed to retrieve deaths data", e);
-                return null;
-            }
-        }
-
-        private List<StatsTracker.StatsEntry> fetchPlaytimes() {
-            try {
-                return StatsTracker.getOverallStats(server, LeaderboardFormatter.StatsType.PLAYTIME);
-            } catch (Exception e) {
-                sendError("Failed to retrieve playtime data: " + e.getMessage());
-                LOGGER.error("Failed to retrieve playtime data", e);
+                sendError("Failed to retrieve kills data: " + e.getMessage());
+                LOGGER.error("Failed to retrieve kills data", e);
                 return null;
             }
         }

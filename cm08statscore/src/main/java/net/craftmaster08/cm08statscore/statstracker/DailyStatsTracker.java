@@ -8,7 +8,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stat;
 import net.minecraft.stats.Stats;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.storage.LevelResource;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -33,16 +35,24 @@ public class DailyStatsTracker {
     private final Path distanceDataPath;
     private final Path playtimeDataPath;
     private final Path deathsDataPath;
+    private final Path killsDataPath;
+
     private final MinecraftServer server;
     private final ResetScheduler resetScheduler;
+
     private final Map<UUID, Double> dailyPlaytimes;
     private final Map<UUID, Double> dailyDistances;
     private static final Map<UUID, Double> dailyDeaths = new HashMap<>();
+    private static final Map<UUID, Double> dailyKills = new HashMap<>();
+
     private final Map<UUID, Long> playtimeLastKnownTicks;
     private final Map<UUID, Long> distanceLastKnownTicks;
     private final Map<UUID, Double> deathsLastKnownTicks;
+    private final Map<UUID, Double> killsLastKnownTicks;
+
     private final Stat<?> playTimeStat;
     private final Stat<?> deathStat;
+    private final Stat<?> killStat;
 
     public DailyStatsTracker(MinecraftServer server) {
         if (server == null) {
@@ -52,16 +62,20 @@ public class DailyStatsTracker {
         this.distanceDataPath = server.getWorldPath(LevelResource.ROOT).resolve("distance_daily.json");
         this.playtimeDataPath = server.getWorldPath(LevelResource.ROOT).resolve("playtime_daily.json");
         this.deathsDataPath = server.getWorldPath(LevelResource.ROOT).resolve("deaths_daily.json");
+        this.killsDataPath = server.getWorldPath(LevelResource.ROOT).resolve("kills_daily.json");
         this.dailyPlaytimes = new HashMap<>();
         this.dailyDistances = new HashMap<>();
         //this.dailyDeaths = new HashMap<>();
+        //this.dailyKills = new HashMap<>();
         this.playtimeLastKnownTicks = new HashMap<>();
         this.distanceLastKnownTicks = new HashMap<>();
         this.deathsLastKnownTicks = new HashMap<>();
+        this.killsLastKnownTicks = new HashMap<>();
         this.resetScheduler = new DailyStatsTracker.ResetScheduler(this);
         try {
             this.playTimeStat = Stats.CUSTOM.get(Stats.PLAY_TIME);
             this.deathStat = Stats.CUSTOM.get(Stats.DEATHS);
+            this.killStat = Stats.CUSTOM.get(Stats.PLAYER_KILLS);
         } catch (Exception e) {
             LOGGER.error("Failed to access Stats.CUSTOM", e);
             throw new RuntimeException("Cannot initialize DailyPlaytimeTracker without Stats.CUSTOM data", e);
@@ -74,12 +88,14 @@ public class DailyStatsTracker {
         DataSerializer.load(playtimeDataPath, dailyPlaytimes, resetScheduler, "daily_playtimes");
         DataSerializer.load(distanceDataPath, dailyDistances, resetScheduler, "daily_distances");
         DataSerializer.load(deathsDataPath, dailyDeaths, resetScheduler, "daily_deaths");
+        DataSerializer.load(killsDataPath, dailyKills, resetScheduler, "daily_kills");
     }
 
     private void saveData() {
         DataSerializer.save(playtimeDataPath, dailyPlaytimes, resetScheduler.getLastResetCheck(), "daily_playtimes");
         DataSerializer.save(distanceDataPath, dailyDistances, resetScheduler.getLastResetCheck(), "daily_distances");
         DataSerializer.save(deathsDataPath, dailyDeaths, resetScheduler.getLastResetCheck(), "daily_deaths");
+        DataSerializer.save(killsDataPath, dailyKills, resetScheduler.getLastResetCheck(), "daily_kills");
     }
 
     public void setDailyResetTime(String timeStr) {
@@ -96,6 +112,10 @@ public class DailyStatsTracker {
 
     public static double getDailyDeaths(UUID uuid) {
         return dailyDeaths.getOrDefault(uuid, 0.0);
+    }
+
+    public static double getDailyKills(UUID uuid) {
+        return dailyKills.getOrDefault(uuid, 0.0);
     }
 
     public void updatePlayerDistance(ServerPlayer player) {
@@ -135,6 +155,19 @@ public class DailyStatsTracker {
         saveData();
     }
 
+    public void updatePlayerKills(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        double currentKills = player.getStats().getValue(killStat);
+        double lastKills = killsLastKnownTicks.getOrDefault(uuid, currentKills);
+
+        double killsIncrement = currentKills - lastKills;
+        dailyKills.merge(uuid, killsIncrement, Double::sum);
+        killsLastKnownTicks.put(uuid, currentKills);
+
+        resetScheduler.checkReset();
+        saveData();
+    }
+
     public void playerLoggedIn(ServerPlayer player) {
         UUID uuid = player.getUUID();
         long currentTicks = player.getStats().getValue(playTimeStat);
@@ -148,6 +181,10 @@ public class DailyStatsTracker {
         double currentDeaths = player.getStats().getValue(deathStat);
         deathsLastKnownTicks.put(uuid, currentDeaths);
         dailyDeaths.putIfAbsent(uuid, 0.0);
+
+        double currentKills = player.getStats().getValue(killStat);
+        killsLastKnownTicks.put(uuid, currentKills);
+        dailyKills.putIfAbsent(uuid, 0.0);
     }
 
     public void playerLoggedOut(ServerPlayer player) {
@@ -174,7 +211,17 @@ public class DailyStatsTracker {
     }
 
     public static String formatDailyDeaths(UUID uuid) {
-        return String.format("%d deaths today", (int) getDailyDeaths(uuid));
+        int dailyDeaths = (int) getDailyDeaths(uuid);
+        String singularPlural = dailyDeaths == 1 ? "Death" : "Deaths";
+
+        return String.format("%d %s today", dailyDeaths, singularPlural);
+    }
+
+    public static String formatDailyKills(UUID uuid) {
+        int dailyKills = (int) getDailyKills(uuid);
+        String singularPlural = dailyKills == 1 ? "Kill" : "Kills";
+
+        return String.format("%d %s today", dailyKills, singularPlural);
     }
 
     private static class ResetScheduler {
@@ -217,6 +264,8 @@ public class DailyStatsTracker {
                 tracker.dailyDistances.replaceAll((uuid, v) -> 0.0);
                 tracker.dailyPlaytimes.replaceAll((uuid, v) -> 0.0);
                 dailyDeaths.replaceAll((uuid, v) -> 0.0);
+                dailyKills.replaceAll((uuid, aDouble) -> 0.0);
+
                 /* more stats here */
                 tracker.saveData();
             }
@@ -228,11 +277,12 @@ public class DailyStatsTracker {
                     tracker.dailyDistances.replaceAll((uuid, v) -> 0.0);
                     tracker.dailyPlaytimes.replaceAll((uuid, v) -> 0.0);
                     dailyDeaths.replaceAll((uuid, v) -> 0.0);
+                    dailyKills.replaceAll((uuid, aDouble) -> 0.0);
+
                     /* more stats here */
                     tracker.saveData();
                 }
             }
-
             lastResetCheck = now;
         }
 
