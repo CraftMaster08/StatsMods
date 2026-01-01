@@ -1,12 +1,11 @@
 package net.craftmaster08.cm08statscore.statstracker;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
+import com.google.gson.*;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stat;
+import net.minecraft.stats.StatType;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.storage.LevelResource;
@@ -14,6 +13,7 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import javax.xml.crypto.Data;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -26,143 +26,72 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import static net.craftmaster08.cm08statscore.statstracker.StatsTracker.calculatePlayerDistance;
 
 public class DailyStatsTracker {
     private static final Logger LOGGER = LogManager.getLogger(DailyStatsTracker.class);
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
-    private final Path distanceDataPath;
-    private final Path playtimeDataPath;
-    private final Path deathsDataPath;
-    private final Path killsDataPath;
-
+    private final String statName;
+    private final Path statDataPath;
     private final MinecraftServer server;
     private final ResetScheduler resetScheduler;
+    private static final Map<UUID, Double> dailyStat = new HashMap<>();
+    private final Map<UUID, Long> statLastKnownValue = new HashMap<>();
+    private final Stat<?> stat;
+    private final String resourceLocation;
+    private final String statType;
 
-    private final Map<UUID, Double> dailyPlaytimes;
-    private final Map<UUID, Double> dailyDistances;
-    private static final Map<UUID, Double> dailyDeaths = new HashMap<>();
-    private static final Map<UUID, Double> dailyKills = new HashMap<>();
-
-    private final Map<UUID, Long> playtimeLastKnownTicks;
-    private final Map<UUID, Long> distanceLastKnownTicks;
-    private final Map<UUID, Double> deathsLastKnownTicks;
-    private final Map<UUID, Double> killsLastKnownTicks;
-
-    private final Stat<?> playTimeStat;
-    private final Stat<?> deathStat;
-    private final Stat<?> killStat;
-
-    public DailyStatsTracker(MinecraftServer server) {
+    public DailyStatsTracker(MinecraftServer server, Path statDataPath, ResourceLocation type, String resourceLocation, String statType, String statName) {
         if (server == null) {
             throw new IllegalArgumentException("MinecraftServer cannot be null");
         }
         this.server = server;
-        this.distanceDataPath = server.getWorldPath(LevelResource.ROOT).resolve("distance_daily.json");
-        this.playtimeDataPath = server.getWorldPath(LevelResource.ROOT).resolve("playtime_daily.json");
-        this.deathsDataPath = server.getWorldPath(LevelResource.ROOT).resolve("deaths_daily.json");
-        this.killsDataPath = server.getWorldPath(LevelResource.ROOT).resolve("kills_daily.json");
-        this.dailyPlaytimes = new HashMap<>();
-        this.dailyDistances = new HashMap<>();
-        //this.dailyDeaths = new HashMap<>();
-        //this.dailyKills = new HashMap<>();
-        this.playtimeLastKnownTicks = new HashMap<>();
-        this.distanceLastKnownTicks = new HashMap<>();
-        this.deathsLastKnownTicks = new HashMap<>();
-        this.killsLastKnownTicks = new HashMap<>();
-        this.resetScheduler = new DailyStatsTracker.ResetScheduler(this);
-        try {
-            this.playTimeStat = Stats.CUSTOM.get(Stats.PLAY_TIME);
-            this.deathStat = Stats.CUSTOM.get(Stats.DEATHS);
-            this.killStat = Stats.CUSTOM.get(Stats.PLAYER_KILLS);
-        } catch (Exception e) {
-            LOGGER.error("Failed to access Stats.CUSTOM", e);
-            throw new RuntimeException("Cannot initialize DailyPlaytimeTracker without Stats.CUSTOM data", e);
-        }
-        setDailyResetTime("00:00:00 UTC"); // Default reset time, can be set externally
+        //this.distanceDataPath = server.getWorldPath(LevelResource.ROOT).resolve("distance_daily.json");
+        //this.playtimeDataPath = server.getWorldPath(LevelResource.ROOT).resolve("playtime_daily.json");
+        //this.deathsDataPath = server.getWorldPath(LevelResource.ROOT).resolve("deaths_daily.json");
+        //this.killsDataPath = server.getWorldPath(LevelResource.ROOT).resolve("kills_daily.json");
+        this.statName = statName;
+        this.statDataPath = statDataPath;
+        this.resetScheduler = new ResetScheduler(this);
+        this.stat = Stats.CUSTOM.get(type);
+        this.resourceLocation = resourceLocation;
+        this.statType = statType;
+        setDailyResetTime("00:00:00 UTC");
         loadData();
     }
 
     private void loadData() {
-        DataSerializer.load(playtimeDataPath, dailyPlaytimes, resetScheduler, "daily_playtimes");
-        DataSerializer.load(distanceDataPath, dailyDistances, resetScheduler, "daily_distances");
-        DataSerializer.load(deathsDataPath, dailyDeaths, resetScheduler, "daily_deaths");
-        DataSerializer.load(killsDataPath, dailyKills, resetScheduler, "daily_kills");
+        DataSerializer.load(statDataPath, dailyStat, resetScheduler, statName);
+        //DataSerializer.load(playtimeDataPath, dailyPlaytimes, resetScheduler, "daily_playtimes");
+        //DataSerializer.load(distanceDataPath, dailyDistances, resetScheduler, "daily_distances");
+        //DataSerializer.load(deathsDataPath, dailyDeaths, resetScheduler, "daily_deaths");
+        //DataSerializer.load(killsDataPath, dailyKills, resetScheduler, "daily_kills");
     }
 
     private void saveData() {
-        DataSerializer.save(playtimeDataPath, dailyPlaytimes, resetScheduler.getLastResetCheck(), "daily_playtimes");
-        DataSerializer.save(distanceDataPath, dailyDistances, resetScheduler.getLastResetCheck(), "daily_distances");
-        DataSerializer.save(deathsDataPath, dailyDeaths, resetScheduler.getLastResetCheck(), "daily_deaths");
-        DataSerializer.save(killsDataPath, dailyKills, resetScheduler.getLastResetCheck(), "daily_kills");
+        DataSerializer.save(statDataPath, dailyStat, resetScheduler.getLastResetCheck(), statName);
+        //DataSerializer.save(playtimeDataPath, dailyPlaytimes, resetScheduler.getLastResetCheck(), "daily_playtimes");
+        //DataSerializer.save(distanceDataPath, dailyDistances, resetScheduler.getLastResetCheck(), "daily_distances");
+        //DataSerializer.save(deathsDataPath, dailyDeaths, resetScheduler.getLastResetCheck(), "daily_deaths");
+        //DataSerializer.save(killsDataPath, dailyKills, resetScheduler.getLastResetCheck(), "daily_kills");
     }
 
     public void setDailyResetTime(String timeStr) {
         resetScheduler.setDailyResetTime(timeStr);
     }
 
-    public double getDailyPlaytime(UUID uuid) {
-        return dailyPlaytimes.getOrDefault(uuid, 0.0);
+    public double getDailyStat(UUID uuid)
+    {
+        return dailyStat.getOrDefault(uuid, 0.0);
     }
 
-    public double getDailyDistance(UUID uuid) {
-        return dailyDistances.getOrDefault(uuid, 0.0);
-    }
-
-    public static double getDailyDeaths(UUID uuid) {
-        return dailyDeaths.getOrDefault(uuid, 0.0);
-    }
-
-    public static double getDailyKills(UUID uuid) {
-        return dailyKills.getOrDefault(uuid, 0.0);
-    }
-
-    public void updatePlayerDistance(ServerPlayer player) {
+    public void updatePlayerStat(ServerPlayer player) {
         UUID uuid = player.getUUID();
-        double currentDistanceCm = calculatePlayerDistance(player);
-        double lastDistanceCm = distanceLastKnownTicks.getOrDefault(uuid, (long) currentDistanceCm).doubleValue();
+        long currentStat = (long) StatsTracker.getStatByUUID(server, statType, resourceLocation, uuid).stat();
+        long lastStat = statLastKnownValue.getOrDefault(uuid, currentStat);
 
-        double distanceTraveledCm = currentDistanceCm - lastDistanceCm;
-        dailyDistances.merge(uuid, distanceTraveledCm, Double::sum);
-        distanceLastKnownTicks.put(uuid, (long) currentDistanceCm);
-
-        resetScheduler.checkReset();
-    }
-
-    public void updatePlayerPlaytime(ServerPlayer player) {
-        UUID uuid = player.getUUID();
-        long currentTicks = player.getStats().getValue(playTimeStat);
-        long lastTicks = playtimeLastKnownTicks.getOrDefault(uuid, currentTicks);
-
-        double hoursPlayed = (currentTicks - lastTicks) / 20.0 / 3600.0;
-        dailyPlaytimes.merge(uuid, hoursPlayed, Double::sum);
-        playtimeLastKnownTicks.put(uuid, currentTicks);
-
-        resetScheduler.checkReset();
-    }
-
-    public void updatePlayerDeaths(ServerPlayer player) {
-        UUID uuid = player.getUUID();
-        double currentDeaths = player.getStats().getValue(deathStat);
-        double lastDeaths = deathsLastKnownTicks.getOrDefault(uuid, currentDeaths);
-
-        double deathsIncrement = currentDeaths - lastDeaths;
-        dailyDeaths.merge(uuid, deathsIncrement, Double::sum);
-        deathsLastKnownTicks.put(uuid, currentDeaths);
-
-        resetScheduler.checkReset();
-        saveData();
-    }
-
-    public void updatePlayerKills(ServerPlayer player) {
-        UUID uuid = player.getUUID();
-        double currentKills = player.getStats().getValue(killStat);
-        double lastKills = killsLastKnownTicks.getOrDefault(uuid, currentKills);
-
-        double killsIncrement = currentKills - lastKills;
-        dailyKills.merge(uuid, killsIncrement, Double::sum);
-        killsLastKnownTicks.put(uuid, currentKills);
+        double stat = currentStat - lastStat;
+        dailyStat.merge(uuid, stat, Double::sum);
+        statLastKnownValue.put(uuid, currentStat);
 
         resetScheduler.checkReset();
         saveData();
@@ -170,38 +99,12 @@ public class DailyStatsTracker {
 
     public void playerLoggedIn(ServerPlayer player) {
         UUID uuid = player.getUUID();
-        long currentTicks = player.getStats().getValue(playTimeStat);
-        playtimeLastKnownTicks.put(uuid, currentTicks);
-        dailyPlaytimes.putIfAbsent(uuid, 0.0);
-
-        double currentDistanceCm = calculatePlayerDistance(player);
-        distanceLastKnownTicks.put(uuid, (long) currentDistanceCm);
-        dailyDistances.putIfAbsent(uuid, 0.0);
-
-        double currentDeaths = player.getStats().getValue(deathStat);
-        deathsLastKnownTicks.put(uuid, currentDeaths);
-        dailyDeaths.putIfAbsent(uuid, 0.0);
-
-        double currentKills = player.getStats().getValue(killStat);
-        killsLastKnownTicks.put(uuid, currentKills);
-        dailyKills.putIfAbsent(uuid, 0.0);
+        long currentStat = (long) StatsTracker.getStatByUUID(server, statType, resourceLocation, uuid).stat();
+        statLastKnownValue.put(uuid, currentStat);
+        dailyStat.putIfAbsent(uuid, 0.0);
     }
 
-    public void playerLoggedOut(ServerPlayer player) {
-        updatePlayerDistance(player);
-        updatePlayerPlaytime(player);
-        //updatePlayerDeaths(player);
-        saveData();
-    }
 
-    public static String formatDailyPlaytime(double hours) {
-        double totalSecondsDouble = hours * 3600.0;
-        int h = (int) (totalSecondsDouble / 3600);
-        double remainingSeconds = totalSecondsDouble % 3600;
-        int m = (int) (remainingSeconds / 60);
-        int s = (int) (remainingSeconds % 60);
-        return String.format("%dh %dmin %dsec today", h, m, s);
-    }
 
     public static String formatDailyDistance(double distanceCm) {
         double totalMeters = distanceCm / 100.0;
@@ -292,7 +195,7 @@ public class DailyStatsTracker {
     }
 
     private static class DataSerializer {
-        static void load(Path dataPath, Map<UUID, Double> dailyStats, DailyStatsTracker.ResetScheduler resetScheduler, String statsFile) {
+        static void load(Path dataPath, Map<UUID, Double> dailyStats, ResetScheduler resetScheduler, String statsFile) {
             File dataFile = dataPath.toFile();
             if (!dataFile.exists()) {
                 save(dataPath, dailyStats, resetScheduler.getLastResetCheck(), statsFile);
@@ -307,7 +210,7 @@ public class DailyStatsTracker {
 
                 if (dataJson.has(statsFile)) {
                     JsonObject statsJson = dataJson.getAsJsonObject(statsFile);
-                    for (Map.Entry<String, com.google.gson.JsonElement> entry : statsJson.entrySet()) {
+                    for (Map.Entry<String, JsonElement> entry : statsJson.entrySet()) {
                         try {
                             UUID uuid = UUID.fromString(entry.getKey());
                             dailyStats.put(uuid, entry.getValue().getAsDouble());

@@ -49,16 +49,6 @@ public class StatsCore {
         }
 
         @SubscribeEvent
-        public void onPlayerTick(TickEvent.PlayerTickEvent event) {
-            if (event.phase == TickEvent.Phase.END && event.player instanceof ServerPlayer player) {
-                if (player.tickCount % 100 == 0 && dailyStatsTracker != null) {
-                    dailyStatsTracker.updatePlayerPlaytime(player);
-                    dailyStatsTracker.updatePlayerDistance(player);
-                }
-            }
-        }
-
-        @SubscribeEvent
         public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
             if (event.getEntity() instanceof ServerPlayer player) {
                 if (dailyStatsTracker != null) {
@@ -69,13 +59,6 @@ public class StatsCore {
                 }
             }
         }
-
-        @SubscribeEvent
-        public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-            if (event.getEntity() instanceof ServerPlayer player && dailyStatsTracker != null) {
-                dailyStatsTracker.playerLoggedOut(player);
-            }
-        }
     }
 
     public static PlayerList getPlayerList() {
@@ -84,12 +67,6 @@ public class StatsCore {
 
     private static class ServiceInitializer {
         static void initialize(MinecraftServer server) {
-            try {
-                dailyStatsTracker = new DailyStatsTracker(server);
-            } catch (RuntimeException e) {
-                LOGGER.error("Failed to initialize DailyStatsTracker: {}", e.getMessage(), e);
-                dailyStatsTracker = null;
-            }
             configManager = new ConfigManager(dailyStatsTracker);
             usernameCache = UsernameCache.getInstance(server);
             try {
@@ -105,12 +82,5 @@ public class StatsCore {
             LOGGER.warn("ConfigManager accessed before initialization");
         }
         return configManager;
-    }
-
-    public static DailyStatsTracker getDailyStatsTracker() {
-        if (dailyStatsTracker == null) {
-            LOGGER.warn("DailyStatsTracker accessed but is null");
-        }
-        return dailyStatsTracker;
     }
 }
