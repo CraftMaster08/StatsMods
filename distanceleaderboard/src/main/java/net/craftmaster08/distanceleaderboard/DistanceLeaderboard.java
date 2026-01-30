@@ -40,9 +40,8 @@ public class DistanceLeaderboard {
             commandsRegistered = true;
             LOGGER.info("Registered /distance command during server starting");
         } else if (!areDependenciesReady()) {
-            LOGGER.warn("Cannot register /distance command: Dependencies not fully initialized (ConfigManager: {}, DailyDistanceTracker: {})",
-                    StatsCore.getConfigManager() != null ? "present" : "null",
-                    StatsCore.getDailyStatsTracker() != null ? "present" : "null");
+            LOGGER.warn("Cannot register /distance command: Dependency not fully initialized (ConfigManager: {})",
+                    StatsCore.getConfigManager() != null ? "present" : "null");
         } else {
             LOGGER.info("Skipping /distance command registration; already registered");
         }
@@ -50,7 +49,6 @@ public class DistanceLeaderboard {
 
     private boolean areDependenciesReady() {
         return StatsCore.getConfigManager() != null &&
-                StatsCore.getDailyStatsTracker() != null &&
                 server != null;
     }
 

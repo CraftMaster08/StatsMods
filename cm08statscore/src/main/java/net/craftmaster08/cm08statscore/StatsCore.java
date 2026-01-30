@@ -2,15 +2,11 @@ package net.craftmaster08.cm08statscore;
 
 import net.craftmaster08.cm08statscore.cache.UsernameCache;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
-import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
-import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -25,7 +21,6 @@ public class StatsCore {
     private static final Logger LOGGER = LogManager.getLogger(StatsCore.class);
     private static ConfigManager configManager;
     private static UsernameCache usernameCache;
-    private static DailyStatsTracker dailyStatsTracker;
     private static MinecraftServer server;
 
     public StatsCore() {
@@ -44,16 +39,12 @@ public class StatsCore {
         public void onServerStarting(ServerStartingEvent event) {
             server = event.getServer();
             ServiceInitializer.initialize(server);
-            LOGGER.info("StatsCore server dependencies initialized with {} username colors and {} blacklisted players",
-                    configManager.getUsernameColors().size(), configManager.getBlacklistedPlayers().size());
+            LOGGER.info("StatsCore server dependencies initialized");
         }
 
         @SubscribeEvent
         public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
             if (event.getEntity() instanceof ServerPlayer player) {
-                if (dailyStatsTracker != null) {
-                    dailyStatsTracker.playerLoggedIn(player);
-                }
                 if (usernameCache != null) {
                     usernameCache.storeUsername(player.getUUID(), player.getGameProfile().getName());
                 }
@@ -67,7 +58,7 @@ public class StatsCore {
 
     private static class ServiceInitializer {
         static void initialize(MinecraftServer server) {
-            configManager = new ConfigManager(dailyStatsTracker);
+            configManager = new ConfigManager();
             usernameCache = UsernameCache.getInstance(server);
             try {
                 configManager.loadConfig();

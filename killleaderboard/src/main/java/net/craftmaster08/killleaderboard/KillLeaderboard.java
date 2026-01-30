@@ -38,15 +38,13 @@ public class KillLeaderboard {
             registerCommands(event.getServer().getCommands().getDispatcher());
             LOGGER.info("Registered /kills command during server starting");
         } else {
-            LOGGER.warn("Cannot register /kills command: Dependencies not fully initialized (ConfigManager: {}, DailyKillTracker: {})",
-                    StatsCore.getConfigManager() != null ? "present" : "null",
-                    StatsCore.getDailyStatsTracker() != null ? "present" : "null");
+            LOGGER.warn("Cannot register /kills command: Dependencies not fully initialized (ConfigManager: {})",
+                    StatsCore.getConfigManager() != null ? "present" : "null");
         }
     }
 
     private boolean areDependenciesReady() {
         return StatsCore.getConfigManager() != null &&
-                StatsCore.getDailyStatsTracker() != null &&
                 server != null;
     }
 

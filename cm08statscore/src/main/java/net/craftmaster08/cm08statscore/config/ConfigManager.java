@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.minecraft.ChatFormatting;
 import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
@@ -17,20 +16,20 @@ import java.util.*;
 public class ConfigManager {
     private static final Logger LOGGER = LogManager.getLogger(ConfigManager.class);
     public static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("statscore_config.json");
-    public static final Path OLD_CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("playtimeleaderboard_config.json");
+    //public static final Path OLD_CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("playtimeleaderboard_config.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public Map<String, ChatFormatting> usernameColors;
     public Set<String> blacklistedPlayers;
     public Map<String, Integer> intLimits;
     public String dailyResetTime;
-    public final DailyStatsTracker dailyStatsTracker;
+    //public final DailyStatsTracker dailyStatsTracker;
 
-    public ConfigManager(DailyStatsTracker dailyPlaytimeTracker) {
-        this.dailyStatsTracker = dailyPlaytimeTracker;
-        if (dailyStatsTracker == null) {
-            LOGGER.warn("DailyStatsTracker is null; daily stats features will be disabled");
-        }
+    public ConfigManager() {
+        //this.dailyStatsTracker = dailyPlaytimeTracker;
+        //if (dailyStatsTracker == null) {
+        //    LOGGER.warn("DailyStatsTracker is null; daily stats features will be disabled");
+        //}
         this.usernameColors = Map.of();
         this.blacklistedPlayers = Set.of();
         this.intLimits = Map.of();
@@ -50,15 +49,17 @@ public class ConfigManager {
 
     public void loadConfig() {
         File configFile = CONFIG_PATH.toFile();
-        File oldConfigFile = OLD_CONFIG_PATH.toFile();
+        //File oldConfigFile = OLD_CONFIG_PATH.toFile();
 
+        /*
         // Warn if old config exists alongside new config
         if (oldConfigFile.exists() && configFile.exists()) {
             LOGGER.warn("Old configuration file '{}' exists alongside '{}'. The old file is ignored and should be deleted manually to avoid confusion. It does not affect mod functionality.",
                     OLD_CONFIG_PATH.getFileName(), CONFIG_PATH.getFileName());
         }
-
+*/
         // Migrate old config if it exists and new config does not
+        /*
         if (oldConfigFile.exists() && !configFile.exists()) {
             LOGGER.info("Found old playtimeleaderboard_config.json; migrating to statscore_config.json");
             if (migrateOldConfig(oldConfigFile, configFile)) {
@@ -67,19 +68,23 @@ public class ConfigManager {
                 LOGGER.error("Failed to migrate old config; creating default statscore_config.json");
                 ConfigLoader.createDefaultConfig(configFile);
             }
-        } else if (!configFile.exists()) {
+        }
+        */
+
+        if (!configFile.exists()) {
             LOGGER.info("No config file found; creating default statscore_config.json");
             ConfigLoader.createDefaultConfig(configFile);
         }
 
-        ConfigLoader.load(configFile, this);
-        if (dailyStatsTracker != null) {
-            dailyStatsTracker.setDailyResetTime(dailyResetTime);
-        } else {
-            LOGGER.warn("Skipping daily reset time due to null tracker");
-        }
+        //ConfigLoader.load(configFile, this);
+        //if (dailyStatsTracker != null) {
+        //    dailyStatsTracker.setDailyResetTime(dailyResetTime);
+        //} else {
+        //    LOGGER.warn("Skipping daily reset time due to null tracker");
+        //}
     }
 
+    /*
     private boolean migrateOldConfig(File oldConfigFile, File newConfigFile) {
         try (FileReader reader = new FileReader(oldConfigFile)) {
             JsonObject oldConfigJson = GSON.fromJson(reader, JsonObject.class);
@@ -166,6 +171,7 @@ public class ConfigManager {
             return false;
         }
     }
+*/
 
     private static class ConfigLoader {
         static void load(File configFile, ConfigManager manager) {
@@ -254,11 +260,11 @@ public class ConfigManager {
             manager.blacklistedPlayers = Set.of();
             manager.intLimits = Map.of();
             manager.dailyResetTime = "00:00:00";
-            if (manager.dailyStatsTracker != null) {
-                manager.dailyStatsTracker.setDailyResetTime(manager.dailyResetTime);
-            } else {
-                LOGGER.warn("Skipping dailyPlaytimeTracker.setDailyResetTime in resetToDefaults due to null tracker");
-            }
+            //if (manager.dailyStatsTracker != null) {
+            //    manager.dailyStatsTracker.setDailyResetTime(manager.dailyResetTime);
+            //} else {
+            //    LOGGER.warn("Skipping dailyPlaytimeTracker.setDailyResetTime in resetToDefaults due to null tracker");
+            //}
         }
     }
 }

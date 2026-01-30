@@ -38,15 +38,13 @@ public class DeathLeaderboard {
             registerCommands(event.getServer().getCommands().getDispatcher());
             LOGGER.info("Registered /deaths command during server starting");
         } else {
-            LOGGER.warn("Cannot register /deaths command: Dependencies not fully initialized (ConfigManager: {}, DailyDeathTracker: {})",
-                    StatsCore.getConfigManager() != null ? "present" : "null",
-                    StatsCore.getDailyStatsTracker() != null ? "present" : "null");
+            LOGGER.warn("Cannot register /deaths command: Dependencies not fully initialized (ConfigManager: {})",
+                    StatsCore.getConfigManager() != null ? "present" : "null");
         }
     }
 
     private boolean areDependenciesReady() {
         return StatsCore.getConfigManager() != null &&
-                StatsCore.getDailyStatsTracker() != null &&
                 server != null;
     }
 

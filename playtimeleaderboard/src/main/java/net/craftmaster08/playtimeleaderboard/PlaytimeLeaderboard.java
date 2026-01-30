@@ -14,7 +14,7 @@ public class PlaytimeLeaderboard {
     public static final String MODID = "playtimeleaderboard";
     private static final Logger LOGGER = LogManager.getLogger(PlaytimeLeaderboard.class);
     private static MinecraftServer server;
-    private boolean commandsRegistered = false;
+    //private boolean commandsRegistered = false;
 
     public PlaytimeLeaderboard() {
         if (!isStatsCorePresent()) {
@@ -32,7 +32,7 @@ public class PlaytimeLeaderboard {
     }
 
     private void onServerStarting(ServerStartingEvent event) {
-        server = event.getServer();
+        /*server = event.getServer();
         LOGGER.info("PlaytimeLeaderboard server set");
 
         if (!commandsRegistered && areDependenciesReady()) {
@@ -40,17 +40,26 @@ public class PlaytimeLeaderboard {
             commandsRegistered = true;
             LOGGER.info("Registered /playtime command during server starting");
         } else if (!areDependenciesReady()) {
-            LOGGER.warn("Cannot register /playtime command: Dependencies not fully initialized (ConfigManager: {}, DailyPlaytimeTracker: {})",
-                    StatsCore.getConfigManager() != null ? "present" : "null",
-                    StatsCore.getDailyStatsTracker() != null ? "present" : "null");
+            LOGGER.warn("Cannot register /playtime command: Dependency not fully initialized (ConfigManager: {})",
+                    StatsCore.getConfigManager() != null ? "present" : "null");
         } else {
             LOGGER.info("Skipping /playtime command registration; already registered");
+        }*/
+
+        server = event.getServer();
+        LOGGER.info("PlaytimeLeaderboard server set");
+
+        if (areDependenciesReady()) {
+            registerCommands(event.getServer().getCommands().getDispatcher());
+            LOGGER.info("Registered /playtime command during server starting");
+        } else {
+            LOGGER.warn("Cannot register /playtime command: Dependencies not fully initialized (ConfigManager: {})",
+                    StatsCore.getConfigManager() != null ? "present" : "null");
         }
     }
 
     private boolean areDependenciesReady() {
         return StatsCore.getConfigManager() != null &&
-                StatsCore.getDailyStatsTracker() != null &&
                 server != null;
     }
 
