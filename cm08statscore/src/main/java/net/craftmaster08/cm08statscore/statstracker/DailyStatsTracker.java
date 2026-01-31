@@ -4,7 +4,6 @@ import net.minecraft.server.level.ServerPlayer;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 
 import net.craftmaster08.cm08statscore.data.DataSerializer;
@@ -56,6 +55,7 @@ public class DailyStatsTracker {
     }
 
     private long getCurrentStat(UUID uuid) {
-        return (long) Objects.requireNonNull(statsTracker.getStatByUUID(uuid)).stat();
+        StatsTracker.StatsEntry entry = statsTracker.getStatByUUID(uuid);
+        return entry != null ? (long) entry.stat() : 0L;
     }
 }

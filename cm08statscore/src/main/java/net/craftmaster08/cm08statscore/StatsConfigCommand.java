@@ -310,10 +310,10 @@ public class StatsConfigCommand {
                         .withStyle(ChatFormatting.RED));
                 return 0;
             }
-            config.dailyResetTime = time;
-            if (config.dailyStatsTracker != null) {
-                config.dailyStatsTracker.setDailyResetTime(time);
-            }
+            //config.dailyResetTime = time;
+            //if (config.dailyStatsTracker != null) {
+            //    config.dailyStatsTracker.setDailyResetTime(time);
+            //}
             saveConfig(config);
             source.sendSystemMessage(Component.literal("Set daily reset time to " + time + " UTC")
                     .withStyle(ChatFormatting.GREEN));

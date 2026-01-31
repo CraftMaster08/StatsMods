@@ -27,7 +27,6 @@ public class LeaderboardExecutor {
     private final ConfigManager config;
     private final DailyStatsTracker dailyStatsTracker;
     private final StatsTracker statsTracker;
-    private MutableComponent message = null;
     private final Logger LOGGER;
 
     LeaderboardExecutor(CommandSourceStack source, Logger LOGGER) {
@@ -49,15 +48,20 @@ public class LeaderboardExecutor {
             sendError("StatsCore configuration not initialized");
             return 0;
         }
+        if (statsTracker == null) {
+            sendError("StatsTracker not initialized");
+            return 0;
+        }
         if (dailyStatsTracker == null) {
             sendError("DailyStatsTracker unavailable; daily kills hover text disabled");
         }
 
         List<StatsTracker.StatsEntry> kills = fetchKills();
-        if (kills == null) {
-            return 0;
-        }
-        if (kills.isEmpty()) {
+        if (kills != null && !kills.isEmpty()) {
+            kills = kills.stream()
+                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))
+                    .toList();
+        } else {
             source.sendSystemMessage(Component.literal("No kills data available")
                     .withStyle(ChatFormatting.YELLOW));
             return 1;
@@ -65,7 +69,7 @@ public class LeaderboardExecutor {
 
         List<MutableComponent> formattedKills = new ArrayList<>();
         for (int i = 0; i < kills.size(); i++) {
-            formattedKills.add(formatKillStat(kills.get(i), i + 1));
+            formattedKills.add(formatKillStat(kills.get(i)));
         }
 
         LeaderboardFormatter formatter = new LeaderboardFormatter(
@@ -74,7 +78,7 @@ public class LeaderboardExecutor {
                 config.getUsernameColors(),
                 formattedKills
         );
-        formatter.displayLeaderboard(source, ChatFormatting.DARK_RED, "Kills: ", ChatFormatting.YELLOW, message);
+        formatter.displayLeaderboard(source, ChatFormatting.DARK_RED, "Kills: ", ChatFormatting.YELLOW);
         return 1;
     }
 
@@ -92,7 +96,7 @@ public class LeaderboardExecutor {
         }
     }
 
-    private MutableComponent formatKillStat(StatsTracker.StatsEntry entry, int position) {
+    private MutableComponent formatKillStat(StatsTracker.StatsEntry entry) {
         String singularPlural = entry.stat() == 1 ? "Kill" : "Kills";
         String hoverText;
 
@@ -103,19 +107,11 @@ public class LeaderboardExecutor {
             hoverText = "N/A";
         }
 
-        MutableComponent valueText = Component.literal(String.format("%d %s", (int) entry.stat(), singularPlural))
+        return Component.literal(String.format("%d %s", (int) entry.stat(), singularPlural))
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.WHITE).withBold(false))
                 .withStyle(s -> s.withHoverEvent(
                         new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText))
                 ));
-
-        PodiumRank rank = PodiumRank.fromPosition(position);
-        message = rank.formatRank();
-        if (rank != PodiumRank.NONE) {
-            message = message.append(Component.literal(" "));
-        }
-
-        return valueText;
     }
 
     public static String formatDailyKills(int dailyKills) {

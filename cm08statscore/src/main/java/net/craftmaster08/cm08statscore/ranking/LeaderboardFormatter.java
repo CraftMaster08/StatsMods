@@ -32,7 +32,7 @@ public class LeaderboardFormatter {
         this.formattedStats = formattedStats;
     }
 
-    public void displayLeaderboard(CommandSourceStack source, ChatFormatting borderColor, String title, ChatFormatting titleColor, MutableComponent message) {
+    public void displayLeaderboard(CommandSourceStack source, ChatFormatting borderColor, String title, ChatFormatting titleColor) {
         // Filter out blacklisted players
         List<StatsTracker.StatsEntry> filteredStats = entries.stream()
                 .filter(pt -> !blacklistedPlayers.contains(pt.username()))
@@ -56,7 +56,7 @@ public class LeaderboardFormatter {
                 .withStyle(titleColor));
 
         for (int i = 0; i < filteredStats.size(); i++) {
-            formatPlayerEntry(source, filteredStats.get(i), totalPadding, message, formattedStats.get(i));
+            formatPlayerEntry(source, filteredStats.get(i), totalPadding, formattedStats.get(i), i + 1);
             if (i == 2 && filteredStats.size() > 3) {
                 source.sendSystemMessage(Component.literal(""));
             }
@@ -81,11 +81,13 @@ public class LeaderboardFormatter {
                 .withStyle(Style.EMPTY.withColor(usernameColor).withBold(false));
     }
 
-    private void formatPlayerEntry(CommandSourceStack source, StatsTracker.StatsEntry pt, int totalPadding, MutableComponent message, MutableComponent formattedStat) {
-        message
-            .append(formatUsername(pt, totalPadding))
-            .append(formattedStat);
-
-        source.sendSystemMessage(message);
+    private void formatPlayerEntry(CommandSourceStack source, StatsTracker.StatsEntry pt, int totalPadding, MutableComponent formattedStat, int position) {
+        PodiumRank rank = PodiumRank.fromPosition(position);
+        MutableComponent line = rank.formatRank();
+        if (rank != PodiumRank.NONE) {
+            line = line.append(Component.literal(" "));
+        }
+        line.append(formatUsername(pt, totalPadding)).append(formattedStat);
+        source.sendSystemMessage(line);
     }
 }

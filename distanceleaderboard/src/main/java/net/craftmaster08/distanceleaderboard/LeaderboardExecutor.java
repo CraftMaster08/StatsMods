@@ -3,7 +3,6 @@ package net.craftmaster08.distanceleaderboard;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.ranking.LeaderboardFormatter;
-import net.craftmaster08.cm08statscore.ranking.PodiumRank;
 import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.craftmaster08.cm08statscore.statstracker.StatsTracker;
 import net.minecraft.ChatFormatting;
@@ -25,7 +24,6 @@ public class LeaderboardExecutor {
     private final ConfigManager config;
     private final DailyStatsTracker dailyStatsTracker;
     private final StatsTracker statsTracker;
-    private MutableComponent message = null;
     private final Logger LOGGER;
 
     final String[] STRING_DISTANCE_STATS = {
@@ -63,18 +61,19 @@ public class LeaderboardExecutor {
         }
 
         List<StatsTracker.StatsEntry> distances = fetchDistances();
-        if (distances == null) {
-            return 0;
-        }
-        if (distances.isEmpty()) {
+        if (distances != null && !distances.isEmpty()) {
+            distances = distances.stream()
+                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))
+                    .toList();
+        } else {
             source.sendSystemMessage(Component.literal("No distance data available")
                     .withStyle(ChatFormatting.YELLOW));
             return 1;
         }
 
         List<MutableComponent> formattedDistances = new ArrayList<>();
-        for (int i = 0; i < distances.size(); i++) {
-            formattedDistances.add(formatDistanceStat(distances.get(i), i + 1));
+        for (StatsTracker.StatsEntry distance : distances) {
+            formattedDistances.add(formatDistanceStat(distance));
         }
 
         LeaderboardFormatter formatter = new LeaderboardFormatter(
@@ -83,7 +82,7 @@ public class LeaderboardExecutor {
                 config.getUsernameColors(),
                 formattedDistances
         );
-        formatter.displayLeaderboard(source, ChatFormatting.DARK_AQUA, "Distance: ", ChatFormatting.GOLD, message);
+        formatter.displayLeaderboard(source, ChatFormatting.DARK_AQUA, "Distance: ", ChatFormatting.GOLD);
         return 1;
     }
 
@@ -93,8 +92,18 @@ public class LeaderboardExecutor {
             for (ServerPlayer player : serverPlayers.getPlayers()) {
                 dailyStatsTracker.updatePlayerStat(player);
             }
+            List<StatsTracker.StatsEntry> entries = statsTracker.getStats();
+            Map<String, Integer> intLimits = config.getIntLimits();
 
-            return statsTracker.getStats();
+            return entries.stream()
+                    .map(e -> {
+                        Integer n = intLimits.get(e.username());
+                        if (n == null || n <= 0) return e;
+                        double extra = (long) n * 2147483647;
+                        return new StatsTracker.StatsEntry(e.username(), e.stat() + extra, e.uuid());
+                    })
+                    .toList();
+
         } catch (Exception e) {
             sendError("Failed to retrieve distance data: " + e.getMessage());
             LOGGER.error("Failed to retrieve distance data", e);
@@ -102,7 +111,7 @@ public class LeaderboardExecutor {
         }
     }
 
-    private MutableComponent formatDistanceStat(StatsTracker.StatsEntry entry, int position) {
+    private MutableComponent formatDistanceStat(StatsTracker.StatsEntry entry) {
         String hoverText;
         if (dailyStatsTracker != null) {
             double dailyDistanceCm = dailyStatsTracker.getDailyStat(entry.uuid());
@@ -111,19 +120,13 @@ public class LeaderboardExecutor {
             hoverText = "N/A";
         }
 
-        MutableComponent valueText = Component.literal(formatDistance(entry.stat()))
+        double distanceKM = entry.stat() / 100000;
+
+        return Component.literal(formatDistance(distanceKM))
                 .withStyle(ChatFormatting.WHITE)
                 .withStyle(s -> s.withHoverEvent(
                         new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText))
                 ));
-
-        PodiumRank rank = PodiumRank.fromPosition(position);
-        message = rank.formatRank();
-        if (rank != PodiumRank.NONE) {
-            message = message.append(Component.literal(" "));
-        }
-
-        return valueText;
     }
 
     public static String formatDailyDistance(double distanceCm) {

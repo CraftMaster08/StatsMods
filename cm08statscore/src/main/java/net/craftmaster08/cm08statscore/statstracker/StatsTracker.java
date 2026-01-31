@@ -114,13 +114,12 @@ public class StatsTracker {
     private StatsEntry getStatsEntry(JsonObject type, UUID uuid, String uuidString) {
         JsonElement statElement;
         double stat = 0.0;
-        String username = null;
+        String username = UsernameResolver.resolve(server, uuid, uuidString);
 
         if (resourceLocation != null) {
             statElement = type.get("minecraft:%s".formatted(resourceLocation));
             if (statElement != null) {
                 stat = statElement.getAsLong();
-                username = UsernameResolver.resolve(server, uuid, uuidString);
             }
         }
         if (resourceLocations != null) {
@@ -128,8 +127,6 @@ public class StatsTracker {
                 statElement = type.get("minecraft:%s".formatted(location));
                 if (statElement != null) {
                     stat += statElement.getAsLong();
-                    username = UsernameResolver.resolve(server, uuid, uuidString);
-
                 }
             }
         }

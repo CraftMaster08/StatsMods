@@ -27,7 +27,6 @@ public class LeaderboardExecutor {
     private final ConfigManager config;
     private final DailyStatsTracker dailyStatsTracker;
     private final StatsTracker statsTracker;
-    private MutableComponent message = null;
     private final Logger LOGGER;
 
     LeaderboardExecutor(CommandSourceStack source, Logger LOGGER) {
@@ -58,10 +57,11 @@ public class LeaderboardExecutor {
         }
 
         List<StatsTracker.StatsEntry> playtimes = fetchPlaytimes();
-        if (playtimes == null) {
-            return 0;
-        }
-        if (playtimes.isEmpty()) {
+        if (playtimes != null && !playtimes.isEmpty()) {
+            playtimes = playtimes.stream()
+                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))  // descending
+                    .toList();
+        } else {
             source.sendSystemMessage(Component.literal("No playtime data available")
                     .withStyle(ChatFormatting.YELLOW));
             return 1;
@@ -78,7 +78,7 @@ public class LeaderboardExecutor {
                 config.getUsernameColors(),
                 formattedPlaytimes
         );
-        formatter.displayLeaderboard(source, ChatFormatting.GOLD, "Playtime: ", ChatFormatting.DARK_GREEN, message);
+        formatter.displayLeaderboard(source, ChatFormatting.GOLD, "Playtime: ", ChatFormatting.DARK_GREEN);
         return 1;
     }
 
@@ -106,19 +106,17 @@ public class LeaderboardExecutor {
             hoverText = "N/A";
         }
 
-        MutableComponent valueText = HourRange.findRange(entry.stat()).formatHours(entry.stat())
+        double hours = entry.stat() / 72000.0;
+
+        MutableComponent valueText = HourRange.findRange(hours).formatHours(hours)
                 .withStyle(s -> s.withHoverEvent(
                         new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText))
                 ));
 
         PodiumRank rank = PodiumRank.fromPosition(position);
-        message = rank.formatRank();
-        if (rank != PodiumRank.NONE) {
-            message = message.append(Component.literal(" "));
-        }
 
-        if (entry.stat() >= 100.0) {
-            double days = entry.stat() / 24.0;
+        if (hours >= 100.0) {
+            double days = hours / 24.0;
             valueText = valueText.append(Component.literal(String.format("    (%.2fd)", days))
                     .withStyle(Style.EMPTY.withColor(rank.getColor()).withBold(true)));
         }

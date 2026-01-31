@@ -30,7 +30,7 @@ public class LeaderboardExecutor {
     private final ConfigManager config;
     private final DailyStatsTracker dailyStatsTracker;
     private final StatsTracker statsTracker;
-    private MutableComponent message = null;
+    private final StatsTracker playtimeTracker;
     private final Logger LOGGER;
 
     LeaderboardExecutor(CommandSourceStack source, Logger LOGGER) {
@@ -41,6 +41,8 @@ public class LeaderboardExecutor {
 
         this.statsTracker = new StatsTracker(server, "minecraft:custom", "deaths");
         this.dailyStatsTracker = new DailyStatsTracker(Path.of("deaths_daily.json"), "daily_deaths", statsTracker);
+
+        this.playtimeTracker = new StatsTracker(server, "minecraft:custom", "play_time");
     }
 
     int execute() {
@@ -52,26 +54,34 @@ public class LeaderboardExecutor {
             sendError("StatsCore configuration not initialized");
             return 0;
         }
+        if (statsTracker == null || playtimeTracker == null) {
+            sendError("StatsTracker(s) not initialized");
+            return 0;
+        }
         if (dailyStatsTracker == null) {
             LOGGER.warn("DailyStatsTracker unavailable; daily deaths hover text disabled");
         }
 
         List<StatsTracker.StatsEntry> deaths = fetchDeaths();
-        if (deaths == null) {
-            return 0;
-        }
-        if (deaths.isEmpty()) {
+        if (deaths != null && !deaths.isEmpty()) {
+            deaths = deaths.stream()
+                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))
+                    .toList();
+        } else {
             source.sendSystemMessage(Component.literal("No deaths data available")
                     .withStyle(ChatFormatting.YELLOW));
             return 1;
         }
 
         List<StatsTracker.StatsEntry> playtimes = fetchPlaytimes();
-        if (playtimes == null) {
-            return 0;
-        }
-        if (playtimes.isEmpty()) {
-            sendError("No playtime data available, PT/Death-Ratio disabled");
+        if (playtimes != null && !playtimes.isEmpty()) {
+            playtimes = playtimes.stream()
+                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))  // descending
+                    .toList();
+        } else {
+            source.sendSystemMessage(Component.literal("No playtime data available. PT/Death-Ratio disabled")
+                    .withStyle(ChatFormatting.YELLOW));
+            return 1;
         }
 
         Map<UUID, Double> playtimeMap = playtimes.stream()
@@ -88,7 +98,7 @@ public class LeaderboardExecutor {
                 config.getUsernameColors(),
                 formattedDeaths
         );
-        formatter.displayLeaderboard(source, ChatFormatting.BLACK, "Deaths: ", ChatFormatting.DARK_AQUA, message);
+        formatter.displayLeaderboard(source, ChatFormatting.BLACK, "Deaths: ", ChatFormatting.DARK_AQUA);
         return 1;
     }
 
@@ -108,11 +118,7 @@ public class LeaderboardExecutor {
 
     private List<StatsTracker.StatsEntry> fetchPlaytimes() {
         try {
-            PlayerList serverPlayers = StatsCore.getPlayerList();
-            for (ServerPlayer player : serverPlayers.getPlayers()) {
-                dailyStatsTracker.updatePlayerStat(player);
-            }
-            return statsTracker.getStats();
+            return playtimeTracker.getStats();
         } catch (Exception e) {
             sendError("Failed to retrieve playtime data: " + e.getMessage());
             LOGGER.error("Failed to retrieve playtime data", e);
@@ -124,6 +130,7 @@ public class LeaderboardExecutor {
         String singularPlural = entry.stat() == 1 ? "Death" : "Deaths";
 
         double playtime = playtimeMap.getOrDefault(entry.uuid(), 0.0);
+        playtime /= 72000.0;
         double ratio = (playtime > 0.0 && entry.stat() >= 1) ? playtime / entry.stat() : playtime;
 
         String hoverText;
@@ -141,10 +148,6 @@ public class LeaderboardExecutor {
                 ));
 
         PodiumRank rank = PodiumRank.fromPosition(position);
-        message = rank.formatRank();
-        if (rank != PodiumRank.NONE) {
-            message = message.append(Component.literal(" "));
-        }
 
         String ratioText = String.format("PT/Death-Ratio: %.1f", ratio);
         int ratioIndex = ratioText.indexOf(":") + 2;
