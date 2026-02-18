@@ -3,7 +3,6 @@ package net.craftmaster08.killleaderboard;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.ranking.LeaderboardFormatter;
-import net.craftmaster08.cm08statscore.ranking.PodiumRank;
 import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.craftmaster08.cm08statscore.statstracker.StatsTracker;
 import net.minecraft.ChatFormatting;
@@ -37,6 +36,9 @@ public class LeaderboardExecutor {
 
         this.statsTracker = new StatsTracker(server, "minecraft:custom", "player_kills");
         this.dailyStatsTracker = new DailyStatsTracker(Path.of("kills_daily.json"), "daily_kills", statsTracker);
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        this.dailyStatsTracker.setDailyResetTime(resetTime);
     }
 
     int execute() {
@@ -68,8 +70,8 @@ public class LeaderboardExecutor {
         }
 
         List<MutableComponent> formattedKills = new ArrayList<>();
-        for (int i = 0; i < kills.size(); i++) {
-            formattedKills.add(formatKillStat(kills.get(i)));
+        for (StatsTracker.StatsEntry kill : kills) {
+            formattedKills.add(formatKillStat(kill));
         }
 
         LeaderboardFormatter formatter = new LeaderboardFormatter(

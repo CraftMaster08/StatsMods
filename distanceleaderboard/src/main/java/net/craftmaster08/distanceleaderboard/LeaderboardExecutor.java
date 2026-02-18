@@ -41,6 +41,9 @@ public class LeaderboardExecutor {
 
         this.statsTracker = new StatsTracker(server, "minecraft:custom", STRING_DISTANCE_STATS);
         this.dailyStatsTracker = new DailyStatsTracker(Path.of("distance_daily.json"), "daily_distances", statsTracker);
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        this.dailyStatsTracker.setDailyResetTime(resetTime);
     }
 
     int execute() {

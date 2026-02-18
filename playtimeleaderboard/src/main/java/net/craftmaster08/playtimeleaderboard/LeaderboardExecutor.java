@@ -37,6 +37,9 @@ public class LeaderboardExecutor {
 
         this.statsTracker = new StatsTracker(server, "minecraft:custom", "play_time");
         this.dailyStatsTracker = new DailyStatsTracker(Path.of("playtime_daily.json"), "daily_playtimes", statsTracker);
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        this.dailyStatsTracker.setDailyResetTime(resetTime);
     }
 
     int execute() {

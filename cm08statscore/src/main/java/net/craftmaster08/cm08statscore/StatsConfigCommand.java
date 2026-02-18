@@ -77,14 +77,11 @@ public class StatsConfigCommand {
     private static SuggestionProvider<CommandSourceStack> onlinePlayers() {
         return (context, builder) -> {
             MinecraftServer server = context.getSource().getServer();
-            if (server != null) {
-                return SharedSuggestionProvider.suggest(
-                        server.getPlayerList().getPlayers().stream()
-                                .map(player -> player.getGameProfile().getName()),
-                        builder
-                );
-            }
-            return builder.buildFuture();
+            return SharedSuggestionProvider.suggest(
+                    server.getPlayerList().getPlayers().stream()
+                            .map(player -> player.getGameProfile().getName()),
+                    builder
+            );
         };
     }
 
@@ -303,26 +300,44 @@ public class StatsConfigCommand {
             if (config == null) {
                 throw new IllegalStateException("ConfigManager not initialized");
             }
-            // Validate time format (HH:mm:ss UTC)
-            String[] parts = time.split(" ");
-            if (parts.length != 1 || !parts[0].matches("^(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$")) {
-                source.sendSystemMessage(Component.literal("Invalid time format. Use HH:mm:ss")
-                        .withStyle(ChatFormatting.RED));
-                return 0;
+
+            // Validation
+            String cleaned = time.trim().replaceAll("\\s+", " ");
+            if (!cleaned.matches("^\\d{2}:\\d{2}:\\d{2}$") &&
+                    !cleaned.matches("^\\d{2}:\\d{2}:\\d{2} ?UTC$")) {
+                throw new IllegalArgumentException("Invalid format. Use HH:mm:ss or HH:mm:ss UTC (24-hour)");
             }
-            //config.dailyResetTime = time;
-            //if (config.dailyStatsTracker != null) {
-            //    config.dailyStatsTracker.setDailyResetTime(time);
-            //}
+
+            // Normalize
+            String fullTime = cleaned.endsWith("UTC") || cleaned.endsWith("utc")
+                    ? cleaned.replaceAll("(?i)utc$", "UTC").trim()
+                    : cleaned + " UTC";
+
+            // range check
+            String[] parts = cleaned.split(":");
+            int h = Integer.parseInt(parts[0]);
+            int m = Integer.parseInt(parts[1]);
+            int s = Integer.parseInt(parts[2]);
+            if (h > 23 || m > 59 || s > 59) {
+                throw new IllegalArgumentException("Time values out of range (HH 0-23, mm/ss 0-59)");
+            }
+
+            config.dailyResetTime = fullTime;
             saveConfig(config);
-            source.sendSystemMessage(Component.literal("Set daily reset time to " + time + " UTC")
+
+            source.sendSystemMessage(Component.literal("Daily reset time set to " + fullTime)
                     .withStyle(ChatFormatting.GREEN));
-            LOGGER.info("{} set daily reset time to {}", source.getTextName(), time);
+            LOGGER.info("{} set daily reset time to {}", source.getTextName(), fullTime);
             return 1;
-        } catch (Exception e) {
-            source.sendSystemMessage(Component.literal("Failed to set daily reset time: " + e.getMessage())
+
+        } catch (IllegalArgumentException e) {
+            source.sendSystemMessage(Component.literal("Error: " + e.getMessage())
                     .withStyle(ChatFormatting.RED));
-            LOGGER.error("Failed to set daily reset time to {}", time, e);
+            return 0;
+        } catch (Exception e) {
+            source.sendSystemMessage(Component.literal("Failed to set time: " + e.getMessage())
+                    .withStyle(ChatFormatting.RED));
+            LOGGER.error("Failed to set daily reset time", e);
             return 0;
         }
     }
