@@ -1,5 +1,6 @@
 package net.craftmaster08.distanceleaderboard;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.ranking.LeaderboardFormatter;
@@ -52,6 +53,16 @@ public class LeaderboardExecutor {
         }
         if (dailyStatsTracker == null) {
             LOGGER.warn("DailyStatsTracker unavailable; daily distance hover text disabled");
+        }
+
+        try {
+            if (!StatsCore.canUseLeaderboard(source.getPlayerOrException().getUUID())) {
+                source.sendSystemMessage(Component.literal("Please wait a few seconds before using this command again.")
+                        .withStyle(ChatFormatting.RED));
+                return 0;
+            }
+        } catch (CommandSyntaxException e) {
+            LOGGER.error("No player found {}", e.getMessage());
         }
 
         List<StatsTracker.StatsEntry> distances = fetchDistances();

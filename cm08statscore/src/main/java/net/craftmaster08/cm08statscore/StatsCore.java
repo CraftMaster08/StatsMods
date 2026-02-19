@@ -17,18 +17,18 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 @Mod(StatsCore.MODID)
 public class StatsCore {
     public static final String MODID = "cm08statscore";
     private static final Logger LOGGER = LogManager.getLogger(StatsCore.class);
+    private static final Map<UUID, Long> commandCooldowns = new HashMap<>();
+    private static final long COOLDOWN_MS = 5000; // 5 Seconds cooldown
+    private static List<DailyStatsTracker> trackers = new ArrayList<>();
     private static ConfigManager configManager;
     private static UsernameCache usernameCache;
     private static MinecraftServer server;
-
-    private static List<DailyStatsTracker> trackers = new ArrayList<>();
 
     public StatsCore() {
         MinecraftForge.EVENT_BUS.register(new EventHandler());
@@ -39,6 +39,16 @@ public class StatsCore {
     private void registerCommands(final RegisterCommandsEvent event) {
         CommandRegistry.register(event.getDispatcher());
         LOGGER.info("Registered StatsCore commands");
+    }
+
+    public static boolean canUseLeaderboard(UUID uuid) {
+        long now = System.currentTimeMillis();
+        long last = commandCooldowns.getOrDefault(uuid, 0L);
+        if (now - last < COOLDOWN_MS) {
+            return false;
+        }
+        commandCooldowns.put(uuid, now);
+        return true;
     }
 
     private static class EventHandler {
@@ -57,16 +67,21 @@ public class StatsCore {
                 }
             }
         }
-    }
 
-    @SubscribeEvent
-    public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        if (event.getServer().getTickCount() % 1200 != 0) return;
+        @SubscribeEvent
+        public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+            commandCooldowns.entrySet().removeIf(e -> System.currentTimeMillis() - e.getValue() > 60000);
+        }
 
-        for (DailyStatsTracker tracker : trackers) {
-            for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
-                tracker.updatePlayerStat(player);
+        @SubscribeEvent
+        public void onServerTick(TickEvent.ServerTickEvent event) {
+            if (event.phase != TickEvent.Phase.END) return;
+            if (event.getServer().getTickCount() % 1200 != 0) return;
+
+            for (DailyStatsTracker tracker : trackers) {
+                for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
+                    tracker.updatePlayerStat(player);
+                }
             }
         }
     }
