@@ -43,9 +43,9 @@ public class KillLeaderboard {
 
         if (areDependenciesReady()) {
             registerCommands(event.getServer().getCommands().getDispatcher());
-            LOGGER.info("Registered /kills command during server startup");
+            LOGGER.info("Registered /playerkills command during server startup");
         } else {
-            LOGGER.warn("Cannot register /kills command: Dependencies not fully initialized (ConfigManager: {})",
+            LOGGER.warn("Cannot register /playerkills command: Dependencies not fully initialized (ConfigManager: {})",
                     StatsCore.getConfigManager() != null ? "present" : "null");
         }
 
