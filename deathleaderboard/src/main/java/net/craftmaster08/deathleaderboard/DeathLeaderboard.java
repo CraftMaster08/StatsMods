@@ -72,6 +72,7 @@ public class DeathLeaderboard {
         );
 
         LOGGER.info("StatsTrackers & DailyStatsTracker initialized");
+        StatsCore.registerDailyTracker(dailyStatsTracker);
     }
 
     private boolean areDependenciesReady() {

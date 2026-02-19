@@ -2,11 +2,13 @@ package net.craftmaster08.cm08statscore;
 
 import net.craftmaster08.cm08statscore.cache.UsernameCache;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
+import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -15,6 +17,9 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Mod(StatsCore.MODID)
 public class StatsCore {
     public static final String MODID = "cm08statscore";
@@ -22,6 +27,8 @@ public class StatsCore {
     private static ConfigManager configManager;
     private static UsernameCache usernameCache;
     private static MinecraftServer server;
+
+    private static List<DailyStatsTracker> trackers = new ArrayList<>();
 
     public StatsCore() {
         MinecraftForge.EVENT_BUS.register(new EventHandler());
@@ -50,6 +57,22 @@ public class StatsCore {
                 }
             }
         }
+    }
+
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        if (event.getServer().getTickCount() % 1200 != 0) return;
+
+        for (DailyStatsTracker tracker : trackers) {
+            for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
+                tracker.updatePlayerStat(player);
+            }
+        }
+    }
+
+    public static void registerDailyTracker(DailyStatsTracker tracker) {
+        trackers.add(tracker);
     }
 
     public static PlayerList getPlayerList() {

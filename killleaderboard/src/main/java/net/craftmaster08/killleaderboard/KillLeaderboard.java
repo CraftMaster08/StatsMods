@@ -64,6 +64,7 @@ public class KillLeaderboard {
         );
 
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
+        StatsCore.registerDailyTracker(dailyStatsTracker);
     }
 
     private boolean areDependenciesReady() {
