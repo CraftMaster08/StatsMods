@@ -46,10 +46,10 @@ public class DataSerializer {
 
             if (dataJson.has("last_reset_check")) {
                 try {
-                    resetScheduler.lastResetCheck = Instant.parse(dataJson.get("last_reset_check").getAsString());
+                    resetScheduler.setLastResetCheck(Instant.parse(dataJson.get("last_reset_check").getAsString()));
                 } catch (DateTimeParseException e) {
                     LOGGER.warn("Invalid last_reset_check format, using current time");
-                    resetScheduler.lastResetCheck = Instant.now();
+                    resetScheduler.setLastResetCheck(Instant.now());
                 }
             }
 
@@ -67,7 +67,7 @@ public class DataSerializer {
         } catch (IOException | JsonParseException e) {
             LOGGER.error(String.format("Failed to load %s.json", dataFile), e);
             dailyStats.clear();
-            resetScheduler.lastResetCheck = Instant.now();
+            resetScheduler.setLastResetCheck(Instant.now());
         }
     }
 
