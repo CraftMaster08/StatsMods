@@ -15,7 +15,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import org.apache.logging.log4j.Logger;
 
-import java.nio.file.Path;
 import java.util.*;
 
 public class LeaderboardExecutor {
@@ -26,21 +25,13 @@ public class LeaderboardExecutor {
     private final StatsTracker statsTracker;
     private final Logger LOGGER;
 
-    final String[] STRING_DISTANCE_STATS = {
-            "walk_one_cm", "sprint_one_cm", "crouch_one_cm", "swim_one_cm",
-            "fall_one_cm", "climb_one_cm", "fly_one_cm", "walk_on_water_one_cm",
-            "walk_under_water_one_cm", "minecart_one_cm", "boat_one_cm", "pig_one_cm",
-            "horse_one_cm", "aviate_one_cm", "strider_one_cm"
-    };
-
     public LeaderboardExecutor(CommandSourceStack source, Logger LOGGER) {
         this.source = source;
         this.server = DistanceLeaderboard.getServer();
         this.config = StatsCore.getConfigManager();
         this.LOGGER = LOGGER;
-
-        this.statsTracker = new StatsTracker(server, "minecraft:custom", STRING_DISTANCE_STATS);
-        this.dailyStatsTracker = new DailyStatsTracker(Path.of("distance_daily.json"), "daily_distances", statsTracker);
+        this.statsTracker = DistanceLeaderboard.getStatsTracker();
+        this.dailyStatsTracker = DistanceLeaderboard.getDailyStatsTracker();
 
         String resetTime = StatsCore.getConfigManager().dailyResetTime;
         this.dailyStatsTracker.setDailyResetTime(resetTime);
@@ -66,7 +57,10 @@ public class LeaderboardExecutor {
         List<StatsTracker.StatsEntry> distances = fetchDistances();
         if (distances != null && !distances.isEmpty()) {
             distances = distances.stream()
-                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))
+                    .sorted((a, b) -> {
+                        int cmp = Double.compare(b.stat(), a.stat());
+                        return cmp != 0 ? cmp : a.username().compareToIgnoreCase(b.username());
+                    })
                     .toList();
         } else {
             source.sendSystemMessage(Component.literal("No distance data available")
@@ -74,18 +68,12 @@ public class LeaderboardExecutor {
             return 1;
         }
 
-        List<MutableComponent> formattedDistances = new ArrayList<>();
-        for (StatsTracker.StatsEntry distance : distances) {
-            formattedDistances.add(formatDistanceStat(distance));
-        }
-
         LeaderboardFormatter formatter = new LeaderboardFormatter(
                 distances,
                 config.getBlacklistedPlayers(),
-                config.getUsernameColors(),
-                formattedDistances
+                config.getUsernameColors()
         );
-        formatter.displayLeaderboard(source, ChatFormatting.DARK_AQUA, "Distance: ", ChatFormatting.GOLD);
+        formatter.displayLeaderboard(source, ChatFormatting.DARK_AQUA, "Distance: ", ChatFormatting.GOLD, this::formatDistanceStat);
         return 1;
     }
 
@@ -114,8 +102,9 @@ public class LeaderboardExecutor {
         }
     }
 
-    private MutableComponent formatDistanceStat(StatsTracker.StatsEntry entry) {
+    private MutableComponent formatDistanceStat(StatsTracker.StatsEntry entry, int position) {
         String hoverText;
+
         if (dailyStatsTracker != null) {
             double dailyDistanceCm = dailyStatsTracker.getDailyStat(entry.uuid());
             hoverText = formatDailyDistance(dailyDistanceCm);

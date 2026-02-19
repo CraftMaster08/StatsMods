@@ -16,8 +16,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import org.apache.logging.log4j.Logger;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 public class LeaderboardExecutor {
@@ -33,9 +31,8 @@ public class LeaderboardExecutor {
         this.server = KillLeaderboard.getServer();
         this.config = StatsCore.getConfigManager();
         this.LOGGER = LOGGER;
-
-        this.statsTracker = new StatsTracker(server, "minecraft:custom", "player_kills");
-        this.dailyStatsTracker = new DailyStatsTracker(Path.of("kills_daily.json"), "daily_kills", statsTracker);
+        this.statsTracker = KillLeaderboard.getStatsTracker();
+        this.dailyStatsTracker = KillLeaderboard.getDailyStatsTracker();
 
         String resetTime = StatsCore.getConfigManager().dailyResetTime;
         this.dailyStatsTracker.setDailyResetTime(resetTime);
@@ -61,7 +58,10 @@ public class LeaderboardExecutor {
         List<StatsTracker.StatsEntry> kills = fetchKills();
         if (kills != null && !kills.isEmpty()) {
             kills = kills.stream()
-                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))
+                    .sorted((a, b) -> {
+                        int cmp = Double.compare(b.stat(), a.stat());
+                        return cmp != 0 ? cmp : a.username().compareToIgnoreCase(b.username());
+                    })
                     .toList();
         } else {
             source.sendSystemMessage(Component.literal("No kills data available")
@@ -69,18 +69,12 @@ public class LeaderboardExecutor {
             return 1;
         }
 
-        List<MutableComponent> formattedKills = new ArrayList<>();
-        for (StatsTracker.StatsEntry kill : kills) {
-            formattedKills.add(formatKillStat(kill));
-        }
-
         LeaderboardFormatter formatter = new LeaderboardFormatter(
                 kills,
                 config.getBlacklistedPlayers(),
-                config.getUsernameColors(),
-                formattedKills
+                config.getUsernameColors()
         );
-        formatter.displayLeaderboard(source, ChatFormatting.DARK_RED, "Kills: ", ChatFormatting.YELLOW);
+        formatter.displayLeaderboard(source, ChatFormatting.DARK_RED, "Kills: ", ChatFormatting.YELLOW, this::formatKillStat);
         return 1;
     }
 
@@ -98,7 +92,7 @@ public class LeaderboardExecutor {
         }
     }
 
-    private MutableComponent formatKillStat(StatsTracker.StatsEntry entry) {
+    private MutableComponent formatKillStat(StatsTracker.StatsEntry entry, int position) {
         String singularPlural = entry.stat() == 1 ? "Kill" : "Kills";
         String hoverText;
 

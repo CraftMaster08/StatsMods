@@ -17,8 +17,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import org.apache.logging.log4j.Logger;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,9 +26,9 @@ public class LeaderboardExecutor {
     private final CommandSourceStack source;
     private final MinecraftServer server;
     private final ConfigManager config;
-    private final DailyStatsTracker dailyStatsTracker;
     private final StatsTracker statsTracker;
     private final StatsTracker playtimeTracker;
+    private final DailyStatsTracker dailyStatsTracker;
     private final Logger LOGGER;
 
     LeaderboardExecutor(CommandSourceStack source, Logger LOGGER) {
@@ -38,11 +36,9 @@ public class LeaderboardExecutor {
         this.server = DeathLeaderboard.getServer();
         this.config = StatsCore.getConfigManager();
         this.LOGGER = LOGGER;
-
-        this.statsTracker = new StatsTracker(server, "minecraft:custom", "deaths");
-        this.dailyStatsTracker = new DailyStatsTracker(Path.of("deaths_daily.json"), "daily_deaths", statsTracker);
-
-        this.playtimeTracker = new StatsTracker(server, "minecraft:custom", "play_time");
+        this.statsTracker = DeathLeaderboard.getStatsTracker();
+        this.playtimeTracker = DeathLeaderboard.getPlaytimeTracker();
+        this.dailyStatsTracker = DeathLeaderboard.getDailyStatsTracker();
 
         String resetTime = StatsCore.getConfigManager().dailyResetTime;
         this.dailyStatsTracker.setDailyResetTime(resetTime);
@@ -68,7 +64,10 @@ public class LeaderboardExecutor {
         List<StatsTracker.StatsEntry> deaths = fetchDeaths();
         if (deaths != null && !deaths.isEmpty()) {
             deaths = deaths.stream()
-                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))
+                    .sorted((a, b) -> {
+                        int cmp = Double.compare(b.stat(), a.stat());
+                        return cmp != 0 ? cmp : a.username().compareToIgnoreCase(b.username());
+                    })
                     .toList();
         } else {
             source.sendSystemMessage(Component.literal("No deaths data available")
@@ -79,7 +78,10 @@ public class LeaderboardExecutor {
         List<StatsTracker.StatsEntry> playtimes = fetchPlaytimes();
         if (playtimes != null && !playtimes.isEmpty()) {
             playtimes = playtimes.stream()
-                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))  // descending
+                    .sorted((a, b) -> {
+                        int cmp = Double.compare(b.stat(), a.stat());
+                        return cmp != 0 ? cmp : a.username().compareToIgnoreCase(b.username());
+                    })
                     .toList();
         } else {
             source.sendSystemMessage(Component.literal("No playtime data available. PT/Death-Ratio disabled")
@@ -90,18 +92,12 @@ public class LeaderboardExecutor {
         Map<UUID, Double> playtimeMap = playtimes.stream()
                 .collect(Collectors.toMap(StatsTracker.StatsEntry::uuid, StatsTracker.StatsEntry::stat));
 
-        List<MutableComponent> formattedDeaths = new ArrayList<>();
-        for (int i = 0; i < deaths.size(); i++) {
-            formattedDeaths.add(formatDeathStat(deaths.get(i), i + 1, playtimeMap));
-        }
-
         LeaderboardFormatter formatter = new LeaderboardFormatter(
                 deaths,
                 config.getBlacklistedPlayers(),
-                config.getUsernameColors(),
-                formattedDeaths
+                config.getUsernameColors()
         );
-        formatter.displayLeaderboard(source, ChatFormatting.BLACK, "Deaths: ", ChatFormatting.DARK_AQUA);
+        formatter.displayLeaderboard(source, ChatFormatting.BLACK, "Deaths: ", ChatFormatting.DARK_AQUA, (entry, position) -> formatDeathStat(entry, position, playtimeMap));
         return 1;
     }
 

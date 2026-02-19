@@ -17,8 +17,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import org.apache.logging.log4j.Logger;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 public class LeaderboardExecutor {
@@ -34,9 +32,8 @@ public class LeaderboardExecutor {
         this.server = PlaytimeLeaderboard.getServer();
         this.config = StatsCore.getConfigManager();
         this.LOGGER = LOGGER;
-
-        this.statsTracker = new StatsTracker(server, "minecraft:custom", "play_time");
-        this.dailyStatsTracker = new DailyStatsTracker(Path.of("playtime_daily.json"), "daily_playtimes", statsTracker);
+        this.statsTracker = PlaytimeLeaderboard.getStatsTracker();
+        this.dailyStatsTracker = PlaytimeLeaderboard.getDailyStatsTracker();
 
         String resetTime = StatsCore.getConfigManager().dailyResetTime;
         this.dailyStatsTracker.setDailyResetTime(resetTime);
@@ -62,7 +59,10 @@ public class LeaderboardExecutor {
         List<StatsTracker.StatsEntry> playtimes = fetchPlaytimes();
         if (playtimes != null && !playtimes.isEmpty()) {
             playtimes = playtimes.stream()
-                    .sorted((a, b) -> Double.compare(b.stat(), a.stat()))  // descending
+                    .sorted((a, b) -> {
+                        int cmp = Double.compare(b.stat(), a.stat());
+                        return cmp != 0 ? cmp : a.username().compareToIgnoreCase(b.username());
+                    })
                     .toList();
         } else {
             source.sendSystemMessage(Component.literal("No playtime data available")
@@ -70,18 +70,12 @@ public class LeaderboardExecutor {
             return 1;
         }
 
-        List<MutableComponent> formattedPlaytimes = new ArrayList<>();
-        for (int i = 0; i < playtimes.size(); i++) {
-            formattedPlaytimes.add(formatPlaytimeStat(playtimes.get(i), i + 1));
-        }
-
         LeaderboardFormatter formatter = new LeaderboardFormatter(
                 playtimes,
                 config.getBlacklistedPlayers(),
-                config.getUsernameColors(),
-                formattedPlaytimes
+                config.getUsernameColors()
         );
-        formatter.displayLeaderboard(source, ChatFormatting.GOLD, "Playtime: ", ChatFormatting.DARK_GREEN);
+        formatter.displayLeaderboard(source, ChatFormatting.GOLD, "Playtime: ", ChatFormatting.DARK_GREEN, this::formatPlaytimeStat);
         return 1;
     }
 

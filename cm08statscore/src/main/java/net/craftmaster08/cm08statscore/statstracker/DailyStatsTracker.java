@@ -1,36 +1,56 @@
 package net.craftmaster08.cm08statscore.statstracker;
 
+import net.craftmaster08.cm08statscore.StatsCore;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import net.craftmaster08.cm08statscore.data.DataSerializer;
+import net.minecraft.stats.Stat;
 
 public class DailyStatsTracker {
     private final String statName;
     private final Path statDataPath;
     private final ResetScheduler resetScheduler;
     static final Map<UUID, Double> dailyStat = new HashMap<>();
-    private final Map<UUID, Long> statLastKnownValue = new HashMap<>();
+    private final Map<UUID, Long> statLastKnownValue;
     private final StatsTracker statsTracker;
+    private final Stat<ResourceLocation> liveStat;
+    private final List<Stat<ResourceLocation>> liveStats;
 
-    public DailyStatsTracker(Path statDataPath, String statName, StatsTracker statsTracker) {
+
+    public DailyStatsTracker(Path statDataPath, String statName, StatsTracker statsTracker, Stat<ResourceLocation> liveStat) {
         this.statName = statName;
         this.statDataPath = statDataPath;
         this.resetScheduler = new ResetScheduler(this);
         this.statsTracker = statsTracker;
-        setDailyResetTime("00:00:00 UTC");
+        this.liveStat = liveStat;
+        this.liveStats = null;
+        this.statLastKnownValue = new HashMap<>();
+        loadData();
+    }
+
+    public DailyStatsTracker(Path statDataPath, String statName, StatsTracker statsTracker, List<Stat<ResourceLocation>> liveStats) {
+        this.statName = statName;
+        this.statDataPath = statDataPath;
+        this.resetScheduler = new ResetScheduler(this);
+        this.statsTracker = statsTracker;
+        this.liveStat = null;
+        this.liveStats = liveStats;
+        this.statLastKnownValue = new HashMap<>();
         loadData();
     }
 
     private void loadData() {
-        DataSerializer.load(statDataPath, dailyStat, resetScheduler, statName);
+        DataSerializer.load(statDataPath, dailyStat, resetScheduler, statName, statLastKnownValue);
     }
 
     void saveData() {
-        DataSerializer.save(statDataPath, dailyStat, resetScheduler.getLastResetCheck(), statName);
+        DataSerializer.save(statDataPath, dailyStat, resetScheduler.getLastResetCheck(), statName, statLastKnownValue);
     }
 
     public void setDailyResetTime(String timeStr) {
@@ -45,16 +65,24 @@ public class DailyStatsTracker {
         UUID uuid = player.getUUID();
 
         long currentStat = getCurrentStat(uuid);
-        long lastStat = statLastKnownValue.getOrDefault(uuid, currentStat);
-        double stat = currentStat - lastStat;
+        long lastStat = statLastKnownValue.getOrDefault(uuid, 0L);
+        double delta = currentStat - lastStat;
 
-        dailyStat.merge(uuid, stat, Double::sum);
+        dailyStat.merge(uuid, delta, Double::sum);
         statLastKnownValue.put(uuid, currentStat);
         resetScheduler.checkReset();
         saveData();
     }
 
     private long getCurrentStat(UUID uuid) {
+        ServerPlayer player = StatsCore.getPlayerList().getPlayer(uuid);
+        if (player != null && liveStat != null) {
+            return player.getStats().getValue(liveStat);
+        }
+        if (player != null && liveStats != null) {
+            return liveStats.stream().mapToLong(s ->
+                    player.getStats().getValue(s)).sum();
+        }
         StatsTracker.StatsEntry entry = statsTracker.getStatByUUID(uuid);
         return entry != null ? (long) entry.stat() : 0L;
     }

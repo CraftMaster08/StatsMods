@@ -10,6 +10,7 @@ import net.minecraft.network.chat.Style;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 public class LeaderboardFormatter {
     private static final int BASE_PADDING = 16;
@@ -18,21 +19,18 @@ public class LeaderboardFormatter {
     private final List<StatsTracker.StatsEntry> entries;
     private final Set<String> blacklistedPlayers;
     private final Map<String, ChatFormatting> usernameColors;
-    private final List<MutableComponent> formattedStats;
 
     public LeaderboardFormatter(
             List<StatsTracker.StatsEntry> entries,
             Set<String> blacklistedPlayers,
-            Map<String, ChatFormatting> usernameColors,
-            List<MutableComponent> formattedStats
+            Map<String, ChatFormatting> usernameColors
     ) {
         this.entries = List.copyOf(entries);
         this.blacklistedPlayers = blacklistedPlayers;
         this.usernameColors = usernameColors;
-        this.formattedStats = formattedStats;
     }
 
-    public void displayLeaderboard(CommandSourceStack source, ChatFormatting borderColor, String title, ChatFormatting titleColor) {
+    public void displayLeaderboard(CommandSourceStack source, ChatFormatting borderColor, String title, ChatFormatting titleColor, BiFunction<StatsTracker.StatsEntry, Integer, MutableComponent> valueFormatter) {
         // Filter out blacklisted players
         List<StatsTracker.StatsEntry> filteredStats = entries.stream()
                 .filter(pt -> !blacklistedPlayers.contains(pt.username()))
@@ -56,7 +54,11 @@ public class LeaderboardFormatter {
                 .withStyle(titleColor));
 
         for (int i = 0; i < filteredStats.size(); i++) {
-            formatPlayerEntry(source, filteredStats.get(i), totalPadding, formattedStats.get(i), i + 1);
+            StatsTracker.StatsEntry entry = filteredStats.get(i);
+            MutableComponent valueText = valueFormatter.apply(entry, i + 1);
+
+            formatPlayerEntry(source, filteredStats.get(i), totalPadding, valueText, i + 1);
+
             if (i == 2 && filteredStats.size() > 3) {
                 source.sendSystemMessage(Component.literal(""));
             }
