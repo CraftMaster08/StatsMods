@@ -105,7 +105,7 @@ public class StatsConfigCommand {
             configManager.loadConfig();
             source.sendSystemMessage(Component.literal("Successfully reloaded statscore_config.json")
                     .withStyle(ChatFormatting.GREEN));
-            LOGGER.info("Configuration reloaded by {}", source.getTextName());
+            LOGGER.info("StatsCore configuration reloaded");
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to reload statscore_config.json: " + e.getMessage())
@@ -128,7 +128,7 @@ public class StatsConfigCommand {
                 saveConfig(config);
                 source.sendSystemMessage(Component.literal("Added " + player + " to blacklist")
                         .withStyle(ChatFormatting.GREEN));
-                LOGGER.info("{} added {} to blacklist", source.getTextName(), player);
+                LOGGER.info("Added {} to blacklist", player);
                 return 1;
             } else {
                 source.sendSystemMessage(Component.literal(player + " is already blacklisted")
@@ -138,7 +138,7 @@ public class StatsConfigCommand {
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to add " + player + " to blacklist: " + e.getMessage())
                     .withStyle(ChatFormatting.RED));
-            LOGGER.error("Failed to blacklist add {}", player, e);
+            LOGGER.error("Failed to add {} to blacklist", player, e);
             return 0;
         }
     }
@@ -159,7 +159,6 @@ public class StatsConfigCommand {
                 source.sendSystemMessage(Component.literal("Blacklisted players: " + players)
                         .withStyle(ChatFormatting.WHITE));
             }
-            LOGGER.info("{} listed blacklist", source.getTextName());
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to list blacklist: " + e.getMessage())
@@ -182,7 +181,7 @@ public class StatsConfigCommand {
                 saveConfig(config);
                 source.sendSystemMessage(Component.literal("Removed " + player + " from blacklist")
                         .withStyle(ChatFormatting.GREEN));
-                LOGGER.info("{} removed {} from blacklist", source.getTextName(), player);
+                LOGGER.info("Removed {} from blacklist", player);
                 return 1;
             } else {
                 source.sendSystemMessage(Component.literal(player + " is not blacklisted")
@@ -207,7 +206,6 @@ public class StatsConfigCommand {
             ChatFormatting color = config.getUsernameColors().getOrDefault(player, ChatFormatting.WHITE);
             source.sendSystemMessage(Component.literal(player + "'s color: " + color.getName().toUpperCase())
                     .withStyle(color));
-            LOGGER.info("{} viewed color for {}", source.getTextName(), player);
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to show color for " + player + ": " + e.getMessage())
@@ -236,7 +234,7 @@ public class StatsConfigCommand {
             saveConfig(config);
             source.sendSystemMessage(Component.literal("Set " + player + "'s color to " + color.getName().toUpperCase())
                     .withStyle(color));
-            LOGGER.info("{} set {}'s color to {}", source.getTextName(), player, color.getName());
+            LOGGER.info("Set {}'s color to {}", player, color.getName());
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to set color for " + player + ": " + e.getMessage())
@@ -259,7 +257,7 @@ public class StatsConfigCommand {
                 saveConfig(config);
                 source.sendSystemMessage(Component.literal("Reset " + player + "'s color to WHITE")
                         .withStyle(ChatFormatting.WHITE));
-                LOGGER.info("{} reset {}'s color", source.getTextName(), player);
+                LOGGER.info("Reset {}'s color", player);
                 return 1;
             } else {
                 source.sendSystemMessage(Component.literal(player + "'s color is already default")
@@ -283,7 +281,6 @@ public class StatsConfigCommand {
             }
             source.sendSystemMessage(Component.literal("Daily reset time: " + config.dailyResetTime)
                     .withStyle(ChatFormatting.WHITE));
-            LOGGER.info("{} viewed daily reset time", source.getTextName());
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to show daily reset time: " + e.getMessage())
@@ -327,7 +324,7 @@ public class StatsConfigCommand {
 
             source.sendSystemMessage(Component.literal("Daily reset time set to " + fullTime)
                     .withStyle(ChatFormatting.GREEN));
-            LOGGER.info("{} set daily reset time to {}", source.getTextName(), fullTime);
+            LOGGER.info("Set daily reset time to {}", fullTime);
             return 1;
 
         } catch (IllegalArgumentException e) {
@@ -401,7 +398,7 @@ public class StatsConfigCommand {
             saveConfig(config);
             source.sendSystemMessage(Component.literal("Set " + player + "'s intlimit count to " + amount)
                     .withStyle(ChatFormatting.GREEN));
-            LOGGER.info("{} set {}'s intlimit count to {}", source.getTextName(), player, amount);
+            LOGGER.info("Set {}'s intlimit count to {}", player, amount);
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to set intlimit count for " + player + ": " + e.getMessage())
