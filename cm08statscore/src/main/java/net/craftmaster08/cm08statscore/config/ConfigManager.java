@@ -17,12 +17,14 @@ public class ConfigManager {
     public Set<String> blacklistedPlayers;
     public Map<String, Integer> intLimits;
     public String dailyResetTime;
+    public int cooldownSeconds;
 
     public ConfigManager() {
         this.usernameColors = Map.of();
         this.blacklistedPlayers = Set.of();
         this.intLimits = Map.of();
-        this.dailyResetTime = "00:00:00";
+        this.dailyResetTime = "00:00:00 UTC";
+        this.cooldownSeconds = 5;
         loadConfig();
     }
 
@@ -44,5 +46,9 @@ public class ConfigManager {
         }
 
         ConfigLoader.load(configFile, this);
+    }
+
+    public void saveConfig() {
+        ConfigLoader.save(this);
     }
 }

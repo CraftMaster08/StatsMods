@@ -24,7 +24,6 @@ public class StatsCore {
     public static final String MODID = "cm08statscore";
     private static final Logger LOGGER = LogManager.getLogger(StatsCore.class);
     private static final Map<UUID, Long> commandCooldowns = new HashMap<>();
-    private static final long COOLDOWN_MS = 5000; // 5 Seconds cooldown
     private static List<DailyStatsTracker> trackers = new ArrayList<>();
     private static ConfigManager configManager;
     private static UsernameCache usernameCache;
@@ -42,9 +41,11 @@ public class StatsCore {
     }
 
     public static boolean canUseLeaderboard(UUID uuid) {
+        long cooldownMs = (configManager != null ? configManager.cooldownSeconds : 5) * 1000L;
+
         long now = System.currentTimeMillis();
         long last = commandCooldowns.getOrDefault(uuid, 0L);
-        if (now - last < COOLDOWN_MS) {
+        if (now - last < cooldownMs) {
             return false;
         }
         commandCooldowns.put(uuid, now);

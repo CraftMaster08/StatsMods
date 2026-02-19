@@ -57,7 +57,7 @@ public class LeaderboardExecutor {
 
         try {
             if (!StatsCore.canUseLeaderboard(source.getPlayerOrException().getUUID())) {
-                source.sendSystemMessage(Component.literal("Please wait a few seconds before using this command again.")
+                source.sendSystemMessage(Component.literal("Please wait " + config.cooldownSeconds + "s before using this command again.")
                         .withStyle(ChatFormatting.RED));
                 return 0;
             }
