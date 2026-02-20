@@ -62,8 +62,10 @@ public class PlaytimeLeaderboard {
                 statsTracker,
                 Stats.CUSTOM.get(Stats.PLAY_TIME)
         );
-
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        dailyStatsTracker.setDailyResetTime(resetTime);
         StatsCore.registerDailyTracker(dailyStatsTracker);
     }
 

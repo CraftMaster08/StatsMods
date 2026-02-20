@@ -70,8 +70,10 @@ public class DeathLeaderboard {
                 statsTracker,
                 Stats.CUSTOM.get(Stats.DEATHS)
         );
-
         LOGGER.info("StatsTrackers & DailyStatsTracker initialized");
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        dailyStatsTracker.setDailyResetTime(resetTime);
         StatsCore.registerDailyTracker(dailyStatsTracker);
     }
 

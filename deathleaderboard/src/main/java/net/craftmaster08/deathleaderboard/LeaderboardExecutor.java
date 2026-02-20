@@ -40,9 +40,6 @@ public class LeaderboardExecutor {
         this.statsTracker = DeathLeaderboard.getStatsTracker();
         this.playtimeTracker = DeathLeaderboard.getPlaytimeTracker();
         this.dailyStatsTracker = DeathLeaderboard.getDailyStatsTracker();
-
-        String resetTime = StatsCore.getConfigManager().dailyResetTime;
-        this.dailyStatsTracker.setDailyResetTime(resetTime);
     }
 
     int execute() {

@@ -62,8 +62,10 @@ public class KillLeaderboard {
                 statsTracker,
                 Stats.CUSTOM.get(Stats.PLAYER_KILLS)
         );
-
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        dailyStatsTracker.setDailyResetTime(resetTime);
         StatsCore.registerDailyTracker(dailyStatsTracker);
     }
 

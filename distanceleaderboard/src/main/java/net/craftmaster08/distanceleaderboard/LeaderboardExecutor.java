@@ -33,9 +33,6 @@ public class LeaderboardExecutor {
         this.LOGGER = LOGGER;
         this.statsTracker = DistanceLeaderboard.getStatsTracker();
         this.dailyStatsTracker = DistanceLeaderboard.getDailyStatsTracker();
-
-        String resetTime = StatsCore.getConfigManager().dailyResetTime;
-        this.dailyStatsTracker.setDailyResetTime(resetTime);
     }
 
     int execute() {

@@ -34,9 +34,6 @@ public class LeaderboardExecutor {
         this.LOGGER = LOGGER;
         this.statsTracker = KillLeaderboard.getStatsTracker();
         this.dailyStatsTracker = KillLeaderboard.getDailyStatsTracker();
-
-        String resetTime = StatsCore.getConfigManager().dailyResetTime;
-        this.dailyStatsTracker.setDailyResetTime(resetTime);
     }
 
     int execute() {

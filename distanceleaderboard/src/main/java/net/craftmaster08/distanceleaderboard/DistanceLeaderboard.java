@@ -83,8 +83,10 @@ public class DistanceLeaderboard {
                 statsTracker,
                 RESOURCE_LOCATIONS_DISTANCE_STATS
         );
-
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        dailyStatsTracker.setDailyResetTime(resetTime);
         StatsCore.registerDailyTracker(dailyStatsTracker);
     }
 

@@ -35,9 +35,6 @@ public class LeaderboardExecutor {
         this.LOGGER = LOGGER;
         this.statsTracker = PlaytimeLeaderboard.getStatsTracker();
         this.dailyStatsTracker = PlaytimeLeaderboard.getDailyStatsTracker();
-
-        String resetTime = StatsCore.getConfigManager().dailyResetTime;
-        this.dailyStatsTracker.setDailyResetTime(resetTime);
     }
 
     int execute() {
