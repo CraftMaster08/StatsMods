@@ -26,6 +26,6 @@ side="BOTH"
 [[dependencies."${mod_id}"]]
 modId="cm08statscore"
 mandatory=true
-versionRange="[0.4,1.0)"
+versionRange="[0.5,1.0)"
 ordering="AFTER"
 side="SERVER"

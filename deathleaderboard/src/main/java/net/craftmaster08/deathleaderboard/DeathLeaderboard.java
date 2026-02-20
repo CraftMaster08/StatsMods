@@ -1,7 +1,10 @@
 package net.craftmaster08.deathleaderboard;
 
 import net.craftmaster08.cm08statscore.StatsCore;
+import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
+import net.craftmaster08.cm08statscore.statstracker.StatsTracker;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.stats.Stats;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -9,11 +12,16 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.file.Path;
+
 @Mod(DeathLeaderboard.MODID)
 public class DeathLeaderboard {
     public static final String MODID = "deathleaderboard";
     private static final Logger LOGGER = LogManager.getLogger(DeathLeaderboard.class);
     private static MinecraftServer server;
+    private static StatsTracker statsTracker;
+    private static StatsTracker playtimeTracker;
+    private static DailyStatsTracker dailyStatsTracker;
 
     public DeathLeaderboard() {
         if (!isStatsCorePresent()) {
@@ -36,17 +44,41 @@ public class DeathLeaderboard {
 
         if (areDependenciesReady()) {
             registerCommands(event.getServer().getCommands().getDispatcher());
-            LOGGER.info("Registered /deaths command during server starting");
+            LOGGER.info("Registered /deaths command during server startup");
         } else {
-            LOGGER.warn("Cannot register /deaths command: Dependencies not fully initialized (ConfigManager: {}, DailyDeathTracker: {})",
-                    StatsCore.getConfigManager() != null ? "present" : "null",
-                    StatsCore.getDailyStatsTracker() != null ? "present" : "null");
+            LOGGER.warn("Cannot register /deaths command: Dependencies not fully initialized (ConfigManager: {})",
+                    StatsCore.getConfigManager() != null ? "present" : "null");
         }
+
+        statsTracker = new StatsTracker(
+                server,
+                "minecraft:custom",
+                "deaths",
+                Stats.CUSTOM.get(Stats.DEATHS)
+        );
+
+        playtimeTracker = new StatsTracker(
+                server,
+                "minecraft:custom",
+                "play_time",
+                Stats.CUSTOM.get(Stats.PLAY_TIME)
+        );
+
+        dailyStatsTracker = new DailyStatsTracker(
+                Path.of("deaths_daily.json"),
+                "daily_deaths",
+                statsTracker,
+                Stats.CUSTOM.get(Stats.DEATHS)
+        );
+        LOGGER.info("StatsTrackers & DailyStatsTracker initialized");
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        dailyStatsTracker.setDailyResetTime(resetTime);
+        StatsCore.registerDailyTracker(dailyStatsTracker);
     }
 
     private boolean areDependenciesReady() {
         return StatsCore.getConfigManager() != null &&
-                StatsCore.getDailyStatsTracker() != null &&
                 server != null;
     }
 
@@ -59,5 +91,26 @@ public class DeathLeaderboard {
             LOGGER.warn("Attempted to access server before initialization");
         }
         return server;
+    }
+
+    public static StatsTracker getStatsTracker() {
+        if (statsTracker == null) {
+            LOGGER.warn("StatsTracker not initialized yet");
+        }
+        return statsTracker;
+    }
+
+    public static StatsTracker getPlaytimeTracker() {
+        if (playtimeTracker == null) {
+            LOGGER.warn("PlaytimeTracker not initialized yet");
+        }
+        return playtimeTracker;
+    }
+
+    public static DailyStatsTracker getDailyStatsTracker() {
+        if (dailyStatsTracker == null) {
+            LOGGER.warn("DailyStatsTracker not initialized yet");
+        }
+        return dailyStatsTracker;
     }
 }

@@ -3,133 +3,62 @@ package net.craftmaster08.cm08statscore.statstracker;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.craftmaster08.cm08statscore.StatsCore;
-import net.craftmaster08.cm08statscore.cache.UsernameCache;
-import net.craftmaster08.cm08statscore.ranking.LeaderboardFormatter;
+import net.craftmaster08.cm08statscore.resolver.UsernameResolver;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.Stat;
 import net.minecraft.stats.Stats;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.storage.LevelResource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.FileReader;
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import static net.minecraft.stats.Stats.DEATHS;
-import static net.minecraft.stats.Stats.ENTITY_KILLED;
 
 public class StatsTracker {
-    private static final int UInt32Limit = 2147483647;
     private static final Logger LOGGER = LogManager.getLogger(StatsTracker.class);
     public record StatsEntry(String username, double stat, UUID uuid) {}
 
-    private static final String[] OFFLINE_DISTANCE_STATS = {
-            "minecraft:walk_one_cm", "minecraft:sprint_one_cm", "minecraft:crouch_one_cm", "minecraft:swim_one_cm",
-            "minecraft:fall_one_cm", "minecraft:climb_one_cm", "minecraft:fly_one_cm", "minecraft:walk_on_water_one_cm",
-            "minecraft:walk_under_water_one_cm", "minecraft:minecart_one_cm", "minecraft:boat_one_cm", "minecraft:pig_one_cm",
-            "minecraft:horse_one_cm", "minecraft:aviate_one_cm"
-    };
+    private final MinecraftServer server;
+    private final String statisticType;
+    private final String resourceLocation;
+    private final String[] resourceLocations;
+    private final Stat<ResourceLocation> liveStatOverride;
+    private final List<Stat<ResourceLocation>> liveStatOverrides;
 
-    static String getStatIdFromType(LeaderboardFormatter.StatsType type) {
-        return switch (type) {
-            case PLAYTIME -> "play_time";
-            case DISTANCE -> null;
-            case DEATHS -> "deaths";
-            case KILLS -> "player_kills";
-        };
+    public StatsTracker(MinecraftServer server, String statisticType, String resourceLocation, Stat<ResourceLocation> liveStatOverride) {
+        this.server = server;
+        this.statisticType = statisticType;
+        this.resourceLocation = resourceLocation;
+        this.resourceLocations = null;
+        this.liveStatOverride = liveStatOverride;
+        this.liveStatOverrides = null;
     }
 
-    public static double calculatePlayerDistance(ServerPlayer player) {
-        double totalDistanceCm = 0.0;
-        try {
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.WALK_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.SPRINT_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.CROUCH_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.SWIM_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.FALL_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.CLIMB_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.FLY_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.WALK_ON_WATER_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.WALK_UNDER_WATER_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.MINECART_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.BOAT_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.PIG_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.HORSE_ONE_CM));
-            totalDistanceCm += player.getStats().getValue(Stats.CUSTOM.get(Stats.AVIATE_ONE_CM));
-
-            int intLimitCount = StatsCore.getConfigManager().getIntLimits().getOrDefault(player.getName().getString(), 0);
-            totalDistanceCm += (double) intLimitCount * UInt32Limit;
-        } catch (Exception e) {
-            LOGGER.error("Error calculating distance for player {}: {}", player.getName().getString(), e.getMessage());
-        }
-        return totalDistanceCm;
+    public StatsTracker(MinecraftServer server, String statisticType, String[] resourceLocations, List<Stat<ResourceLocation>> liveStatOverrides) {
+        this.server = server;
+        this.statisticType = statisticType;
+        this.resourceLocation = null;
+        this.resourceLocations = resourceLocations;
+        this.liveStatOverride = null;
+        this.liveStatOverrides = liveStatOverrides;
     }
 
-    public static List<StatsEntry> getOverallStats(MinecraftServer server, LeaderboardFormatter.StatsType type) {
-        List<StatsEntry> online = getOnlineStats(server, type);
-        List<StatsEntry> offline = getOfflineStats(server, type);
-
-        return Stream.concat(online.stream(), offline.stream())
-                .sorted(Comparator.comparingDouble(StatsEntry::stat).reversed())
-                .toList();
-    }
-
-    public static List<StatsEntry> getOnlineStats(MinecraftServer server, LeaderboardFormatter.StatsType type) {
+    public List<StatsEntry> getStats() {
         List<StatsEntry> entries = new ArrayList<>();
 
-        switch (type) {
-            case PLAYTIME -> entries = server.getPlayerList().getPlayers().stream()
-                    .map(player -> new StatsEntry(
-                            player.getName().getString(),
-                            player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME)) / 20.0 / 3600.0,
-                            player.getUUID()
-                    ))
-                    .toList();
-
-            case DISTANCE -> entries = server.getPlayerList().getPlayers().stream()
-                    .map(player -> {
-                        double totalDistanceCm = calculatePlayerDistance(player);
-                        double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
-                        return new StatsEntry(
-                                player.getName().getString(),
-                                distanceKm,
-                                player.getUUID()
-                        );
-                    })
-                    .toList();
-
-            case DEATHS -> entries = server.getPlayerList().getPlayers().stream()
-                    .map(player -> new StatsEntry(
-                            player.getName().getString(),
-                            player.getStats().getValue(Stats.CUSTOM.get(DEATHS)),
-                            player.getUUID()
-                    ))
-                    .toList();
-
-            case KILLS -> entries = server.getPlayerList().getPlayers().stream()
-                    .map(player -> new StatsEntry(
-                            player.getName().getString(),
-                            player.getStats().getValue(Stats.ENTITY_KILLED.get(EntityType.PLAYER)),
-                            player.getUUID()
-                    ))
-                    .toList();
+        // online
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            UUID uuid = player.getUUID();
+            String username = player.getGameProfile().getName();
+            long statValue = getLiveStatValue(player);
+            entries.add(new StatsEntry(username, statValue, uuid));
         }
-        return entries;
-    }
 
-    public static List<StatsEntry> getOfflineStats(MinecraftServer server, LeaderboardFormatter.StatsType type) {
-        List<StatsEntry> entries = new ArrayList<>();
-
+        // offline
         File statsFolder = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
         if (!fileExists(statsFolder)) {
             return entries;
@@ -149,142 +78,109 @@ public class StatsTracker {
                 String uuidString = statFile.getName().replace(".json", "");
                 UUID uuid = UUID.fromString(uuidString);
 
-                if (onlineUUIDs.contains(uuid)) {
-                    continue;
-                }
+                if (onlineUUIDs.contains(uuid)) continue;
 
-                JsonObject statsJson;
                 try (FileReader reader = new FileReader(statFile)) {
-                    statsJson = JsonParser.parseReader(reader).getAsJsonObject();
+                    JsonObject statsJson = JsonParser.parseReader(reader).getAsJsonObject();
+                    JsonObject stats = statsJson.getAsJsonObject("stats");
+                    if (stats == null) continue;
+
+                    JsonObject type = stats.getAsJsonObject(statisticType);
+                    if (type == null) continue;
+
+                    double stat = calculateStatFromType(type);
+                    String username = UsernameResolver.resolve(server, uuid, uuidString);
+                    entries.add(new StatsEntry(username, stat, uuid));
                 }
-
-                JsonObject stats = statsJson.getAsJsonObject("stats");
-                if (stats != null) {
-                    JsonObject custom = stats.getAsJsonObject("minecraft:custom");
-                    if (custom != null) {
-                        switch (type) {
-                            case PLAYTIME -> {
-                                JsonElement playTimeElement = custom.get("minecraft:%s".formatted(getStatIdFromType(LeaderboardFormatter.StatsType.PLAYTIME)));
-                                if (playTimeElement != null) {
-                                    double hours = playTimeElement.getAsLong() / 20.0 / 3600.0;
-                                    String username = UsernameResolver.resolve(server, uuid, uuidString);
-                                    entries.add(new StatsEntry(username, hours, uuid));
-                                }
-                            }
-
-                            case DISTANCE -> {
-                                double totalDistanceCm = 0.0;
-                                for (String stat : OFFLINE_DISTANCE_STATS) {
-                                    JsonElement element = custom.get(stat);
-                                    if (element != null) {
-                                        totalDistanceCm += element.getAsLong();
-                                    }
-                                }
-                                String username = UsernameResolver.resolve(server, uuid, uuidString);
-                                int intLimitCount = StatsCore.getConfigManager().getIntLimits().getOrDefault(username, 0);
-                                totalDistanceCm += (double) intLimitCount * UInt32Limit;
-                                double distanceKm = totalDistanceCm / 100000.0; // Convert cm to km
-                                entries.add(new StatsEntry(username, distanceKm, uuid));
-                            }
-
-                            case DEATHS -> {
-                                JsonElement deathElement = custom.get(String.format("minecraft:%s", getStatIdFromType(LeaderboardFormatter.StatsType.DEATHS)));
-                                if (deathElement != null) {
-                                    int deathsCount = deathElement.getAsInt();
-                                    String username = UsernameResolver.resolve(server, uuid, uuidString);
-                                    entries.add(new StatsEntry(username, deathsCount, uuid));
-                                } else {
-                                    entries.add(new StatsEntry(UsernameResolver.resolve(server, uuid, uuidString), 0, uuid));
-                                }
-                            }
-
-                            case KILLS -> {
-                                JsonElement killElement = custom.get(String.format("minecraft:%s", getStatIdFromType(LeaderboardFormatter.StatsType.KILLS)));
-                                if (killElement != null) {
-                                    int killsCount = killElement.getAsInt();
-                                    String username = UsernameResolver.resolve(server, uuid, uuidString);
-                                    entries.add(new StatsEntry(username, killsCount, uuid));
-                                } else {
-                                    entries.add(new StatsEntry(UsernameResolver.resolve(server, uuid, uuidString), 0, uuid));
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (IOException | IllegalArgumentException e) {
+            } catch (Exception e) {
                 LOGGER.error("Error reading stat file {}: {}", statFile.getName(), e.getMessage());
             }
         }
+
         return entries;
     }
 
-    public static String formatDistance(double distanceKm) {
-        if (distanceKm >= 1000.0) {
-            return String.format("%dkm", (int) distanceKm);
-        } else if (distanceKm >= 1.0) {
-            return String.format("%.2fkm", distanceKm);
-        } else {
-            double meters = distanceKm * 1000.0;
-            return String.format("%dm", (int) meters);
+    public StatsEntry getStatByUUID(UUID uuid) {
+        ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(uuid);
+        if (onlinePlayer != null) {
+            long value = getLiveStatValue(onlinePlayer);
+            return new StatsEntry(onlinePlayer.getGameProfile().getName(), value, uuid);
         }
+
+        File statsFolder = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
+        File statFile = new File(statsFolder, uuid + ".json");
+        if (!statFile.exists()) return null;
+
+        try (FileReader reader = new FileReader(statFile)) {
+            JsonObject statsJson = JsonParser.parseReader(reader).getAsJsonObject();
+            JsonObject stats = statsJson.getAsJsonObject("stats");
+            if (stats == null) return null;
+
+            JsonObject type = stats.getAsJsonObject(statisticType);
+            if (type == null) return null;
+
+            double stat = calculateStatFromType(type);
+            String username = UsernameResolver.resolve(server, uuid, uuid.toString());
+            return new StatsEntry(username, stat, uuid);
+        } catch (Exception e) {
+            LOGGER.error("Error reading stat file for UUID {}: {}", uuid, e.getMessage());
+            return null;
+        }
+    }
+
+    private long getLiveStatValue(ServerPlayer player) {
+        try {
+            if (resourceLocation != null) {
+                if (liveStatOverride != null) {
+                    return player.getStats().getValue(liveStatOverride);
+                }
+                ResourceLocation rl = ResourceLocation.fromNamespaceAndPath("minecraft", resourceLocation);
+                LOGGER.info("[LIVE] Attempting stat lookup for key: {}", rl);
+                Stat<ResourceLocation> stat = Stats.CUSTOM.get(rl);
+                LOGGER.info("[LIVE] Stat<ResLoc> is {}", stat);
+                return player.getStats().getValue(stat);
+            }
+
+            if (resourceLocations != null) {
+                if (liveStatOverrides != null) {
+                    long total = 0;
+                    for (Stat<ResourceLocation> loc : liveStatOverrides) {
+                        total += player.getStats().getValue(loc);
+                    }
+                    return total;
+                }
+                long total = 0;
+                for (String loc : resourceLocations) {
+                    ResourceLocation rl = ResourceLocation.fromNamespaceAndPath("minecraft", loc);
+                    LOGGER.info("ResourceLocation: {}", rl);
+                    Stat<ResourceLocation> stat = Stats.CUSTOM.get(rl);
+                    total += player.getStats().getValue(stat);
+                }
+                return total;
+            }
+            return 0;
+        } catch (Exception e) {
+            LOGGER.error("Live stat fail for {}: {}", player.getScoreboardName(), e.getMessage());
+            return 0;
+        }
+    }
+
+    private double calculateStatFromType(JsonObject type) {
+        double stat = 0.0;
+        if (resourceLocation != null) {
+            JsonElement el = type.get("minecraft:" + resourceLocation);
+            if (el != null) stat = el.getAsLong();
+        }
+        if (resourceLocations != null) {
+            for (String loc : resourceLocations) {
+                JsonElement el = type.get("minecraft:" + loc);
+                if (el != null) stat += el.getAsLong();
+            }
+        }
+        return stat;
     }
 
     public static boolean fileExists(File statsFolder) {
         return statsFolder.exists() && statsFolder.isDirectory();
-    }
-
-    private interface UsernameResolver {
-        static String resolve(MinecraftServer server, UUID uuid, String uuidString) {
-            // Try server profile cache
-            String username = server.getProfileCache()
-                    .get(uuid)
-                    .map(profile -> {
-                        String name = profile.getName();
-                        if (name == null || name.isEmpty()) {
-                            LOGGER.warn("Profile cache returned null/empty name for UUID: {}", uuidString);
-                            return null;
-                        }
-                        return name;
-                    })
-                    .orElse(null);
-
-            if (username != null) {
-                return username;
-            }
-
-            // Try custom cache
-            UsernameCache cache = UsernameCache.getInstance(server);
-            username = cache.getUsername(uuid);
-            if (username != null) {
-                return username;
-            }
-
-            // Fallback to Mojang API
-            try {
-                HttpClient client = HttpClient.newHttpClient();
-                String uuidNoHyphens = uuidString.replace("-", "");
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create("https://api.mojang.com/user/profile/" + uuidNoHyphens))
-                        .GET()
-                        .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-                if (response.statusCode() == 200) {
-                    JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
-                    username = json.get("name").getAsString();
-                    if (username != null && !username.isEmpty()) {
-                        cache.storeUsername(uuid, username);
-                        return username;
-                    }
-                } else {
-                    LOGGER.warn("Mojang API request failed for UUID: {}, status: {}", uuidString, response.statusCode());
-                }
-            } catch (IOException | InterruptedException e) {
-                LOGGER.error("Error querying Mojang API for UUID: {}", uuidString, e);
-            }
-
-            // Final fallback
-            return "Unknown_" + uuidString.substring(0, 8);
-        }
     }
 }
