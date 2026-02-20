@@ -25,9 +25,12 @@ public class ResetScheduler {
             if (parts.length != 2 || !parts[1].equals("UTC")) {
                 throw new DateTimeParseException("Invalid format, expected 'HH:mm:ss UTC'", timeStr, 0);
             }
+            String fullTime = timeStr.trim();
+            if (!fullTime.toUpperCase().endsWith(" UTC")) {
+                fullTime += " UTC";
+            }
+            LOGGER.info("Set daily reset time to: {}", fullTime);
             this.resetTime = LocalTime.parse(parts[0], DateTimeFormatter.ofPattern("HH:mm:ss"));
-            String timeUTC = timeStr + " UTC";
-            LOGGER.info("Set daily reset time to: {}", timeUTC);
         } catch (DateTimeParseException e) {
             LOGGER.error("Invalid daily_reset_time format: {}. Defaulting to 00:00:00 UTC", timeStr, e);
             this.resetTime = LocalTime.of(0, 0, 0);
