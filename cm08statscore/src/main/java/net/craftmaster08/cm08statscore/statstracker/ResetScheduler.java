@@ -61,14 +61,14 @@ public class ResetScheduler {
 
     private void resetStats(ZonedDateTime currentZdt) {
         LOGGER.info("Resetting daily stats at {}", currentZdt);
-        DailyStatsTracker.dailyStat.replaceAll((uuid, v) -> 0.0);
+        tracker.resetDailyStats();
     }
 
     public Instant getLastResetCheck() {
         return lastResetCheck;
     }
 
-    public void setLastResetCheck(Instant resetcheck) {
-        lastResetCheck = resetcheck;
+    public void setLastResetCheck(Instant resetCheck) {
+        lastResetCheck = resetCheck;
     }
 }

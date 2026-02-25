@@ -13,6 +13,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.stats.Stat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -106,6 +107,7 @@ public class StatsConfigCommand {
                 throw new IllegalStateException("ConfigManager not initialized");
             }
             configManager.loadConfig();
+            StatsCore.updateAllDailyResetTimes();
             source.sendSystemMessage(Component.literal("Successfully reloaded statscore_config.json")
                     .withStyle(ChatFormatting.GREEN));
             LOGGER.info("StatsCore configuration reloaded");
@@ -324,6 +326,7 @@ public class StatsConfigCommand {
 
             config.dailyResetTime = fullTime;
             config.saveConfig();
+            StatsCore.updateAllDailyResetTimes();
 
             source.sendSystemMessage(Component.literal("Daily reset time set to " + fullTime)
                     .withStyle(ChatFormatting.GREEN));

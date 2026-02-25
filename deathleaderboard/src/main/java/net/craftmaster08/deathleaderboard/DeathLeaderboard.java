@@ -68,7 +68,8 @@ public class DeathLeaderboard {
                 Path.of("deaths_daily.json"),
                 "daily_deaths",
                 statsTracker,
-                Stats.CUSTOM.get(Stats.DEATHS)
+                Stats.CUSTOM.get(Stats.DEATHS),
+                1.0
         );
         LOGGER.info("StatsTrackers & DailyStatsTracker initialized");
 

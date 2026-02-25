@@ -60,7 +60,8 @@ public class PlaytimeLeaderboard {
                 Path.of("playtime_daily.json"),
                 "daily_playtimes",
                 statsTracker,
-                Stats.CUSTOM.get(Stats.PLAY_TIME)
+                Stats.CUSTOM.get(Stats.PLAY_TIME),
+                72000.0
         );
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
 

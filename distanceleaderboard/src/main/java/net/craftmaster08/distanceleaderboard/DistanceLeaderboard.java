@@ -81,7 +81,8 @@ public class DistanceLeaderboard {
                 Path.of("distance_daily.json"),
                 "daily_distances",
                 statsTracker,
-                RESOURCE_LOCATIONS_DISTANCE_STATS
+                RESOURCE_LOCATIONS_DISTANCE_STATS,
+                100.0
         );
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
 

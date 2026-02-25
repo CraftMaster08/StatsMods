@@ -91,6 +91,16 @@ public class StatsCore {
         trackers.add(tracker);
     }
 
+    public static void updateAllDailyResetTimes() {
+        ConfigManager config = getConfigManager();
+        if (config == null) return;
+        String time = config.dailyResetTime;
+        for (DailyStatsTracker tracker : trackers) {
+            tracker.setDailyResetTime(time);
+        }
+        LOGGER.info("Updated daily reset times for {} trackers", trackers.size());
+    }
+
     public static PlayerList getPlayerList() {
         return server.getPlayerList();
     }

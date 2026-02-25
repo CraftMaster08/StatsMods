@@ -60,7 +60,8 @@ public class KillLeaderboard {
                 Path.of("kills_daily.json"),
                 "daily_kills",
                 statsTracker,
-                Stats.CUSTOM.get(Stats.PLAYER_KILLS)
+                Stats.CUSTOM.get(Stats.PLAYER_KILLS),
+                1.0
         );
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
 
