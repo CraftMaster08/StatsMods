@@ -12,8 +12,6 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.nio.file.Path;
-
 @Mod(KillLeaderboard.MODID)
 public class KillLeaderboard {
     public static final String MODID = "killleaderboard";
@@ -57,11 +55,12 @@ public class KillLeaderboard {
         );
 
         dailyStatsTracker = new DailyStatsTracker(
-                Path.of("kills_daily.json"),
                 "daily_kills",
+                "last_known_kills",
+                "kills_daily.json",
+                1.0,
                 statsTracker,
-                Stats.CUSTOM.get(Stats.PLAYER_KILLS),
-                1.0
+                Stats.CUSTOM.get(Stats.PLAYER_KILLS)
         );
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
 

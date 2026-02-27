@@ -6,6 +6,7 @@ import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
@@ -17,6 +18,7 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.file.Path;
 import java.util.*;
 
 @Mod(StatsCore.MODID)
@@ -66,6 +68,9 @@ public class StatsCore {
                 if (usernameCache != null) {
                     usernameCache.storeUsername(player.getUUID(), player.getGameProfile().getName());
                 }
+                for (DailyStatsTracker tracker : trackers) {
+                    tracker.updatePlayerStat(player);
+                }
             }
         }
 
@@ -77,10 +82,16 @@ public class StatsCore {
         @SubscribeEvent
         public void onServerTick(TickEvent.ServerTickEvent event) {
             if (event.phase != TickEvent.Phase.END) return;
-            if (event.getServer().getTickCount() % 1200 != 0) return;
+
+            MinecraftServer server = event.getServer();
+            for (DailyStatsTracker tracker : trackers) {
+                tracker.getResetScheduler().checkReset();
+            }
+
+            if (server.getTickCount() % 1200 != 0) return;
 
             for (DailyStatsTracker tracker : trackers) {
-                for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                     tracker.updatePlayerStat(player);
                 }
             }
@@ -103,6 +114,14 @@ public class StatsCore {
 
     public static PlayerList getPlayerList() {
         return server.getPlayerList();
+    }
+
+    public static Path getDailyStatsPath() {
+        if (server == null) {
+            LOGGER.warn("Cannot get daily stats path: server not initialized");
+            return null;
+        }
+        return server.getWorldPath(LevelResource.ROOT).resolve("dailyStats.json");
     }
 
     private static class ServiceInitializer {

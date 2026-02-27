@@ -12,8 +12,6 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.nio.file.Path;
-
 @Mod(PlaytimeLeaderboard.MODID)
 public class PlaytimeLeaderboard {
     public static final String MODID = "playtimeleaderboard";
@@ -57,11 +55,12 @@ public class PlaytimeLeaderboard {
         );
 
         dailyStatsTracker = new DailyStatsTracker(
-                Path.of("playtime_daily.json"),
                 "daily_playtimes",
+                "last_known_playtimes",
+                "playtime_daily.json",
+                72000.0,
                 statsTracker,
-                Stats.CUSTOM.get(Stats.PLAY_TIME),
-                72000.0
+                Stats.CUSTOM.get(Stats.PLAY_TIME)
         );
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
 

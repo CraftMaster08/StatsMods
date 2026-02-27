@@ -60,8 +60,10 @@ public class ResetScheduler {
     }
 
     private void resetStats(ZonedDateTime currentZdt) {
-        LOGGER.info("Resetting daily stats at {}", currentZdt);
-        tracker.resetDailyStats();
+        if (tracker.hasAnyNonZeroDailyStats()) {
+            LOGGER.info("Resetting daily stats at {}", currentZdt);
+            tracker.resetDailyStats();
+        }
     }
 
     public Instant getLastResetCheck() {

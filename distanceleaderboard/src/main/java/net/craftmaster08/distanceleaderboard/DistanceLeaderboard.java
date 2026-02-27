@@ -14,7 +14,6 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.nio.file.Path;
 import java.util.List;
 
 @Mod(DistanceLeaderboard.MODID)
@@ -78,11 +77,12 @@ public class DistanceLeaderboard {
         );
 
         dailyStatsTracker = new DailyStatsTracker(
-                Path.of("distance_daily.json"),
                 "daily_distances",
+                "last_known_distances",
+                "distance_daily.json",
+                100.0,
                 statsTracker,
-                RESOURCE_LOCATIONS_DISTANCE_STATS,
-                100.0
+                RESOURCE_LOCATIONS_DISTANCE_STATS
         );
         LOGGER.info("StatsTracker & DailyStatsTracker initialized");
 
