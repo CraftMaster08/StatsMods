@@ -11,6 +11,7 @@ Just run `/statscore dailyresettime <HH:mm:ss>` once and it should be fine.
 ## StatsCore (v0.5)
 
 Library Mod required for all Statistics Mods.
+All total stats are read from the normal Minecraft stats directory. Daily stats are calculated and saved in `dailyStats.json`, located in a world's directory.
 
 ## Playtime Leaderboard (v0.5)
 #### (StatsCore Version 0.5)
@@ -54,6 +55,8 @@ This Mod does not include a Stats Color Coding feature! (only player names, whic
 Same applies here, just for number of deaths per player.
 This Mod does not include a Stats Color Coding feature! (only player names, which is a feature of StatsCore)
 
+### Playtime/Death-Ratio
+Displays this additional Statistic next to a player's death stat.
 
 ## Kill Leaderboard (v0.2)
 #### (Statscore Version 0.5)
