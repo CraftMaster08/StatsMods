@@ -1,7 +1,10 @@
 package net.craftmaster08.playtimeleaderboard;
 
 import net.craftmaster08.cm08statscore.StatsCore;
+import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
+import net.craftmaster08.cm08statscore.statstracker.StatsTracker;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.stats.Stats;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -14,7 +17,8 @@ public class PlaytimeLeaderboard {
     public static final String MODID = "playtimeleaderboard";
     private static final Logger LOGGER = LogManager.getLogger(PlaytimeLeaderboard.class);
     private static MinecraftServer server;
-    private boolean commandsRegistered = false;
+    private static StatsTracker statsTracker;
+    private static DailyStatsTracker dailyStatsTracker;
 
     public PlaytimeLeaderboard() {
         if (!isStatsCorePresent()) {
@@ -35,22 +39,38 @@ public class PlaytimeLeaderboard {
         server = event.getServer();
         LOGGER.info("PlaytimeLeaderboard server set");
 
-        if (!commandsRegistered && areDependenciesReady()) {
+        if (areDependenciesReady()) {
             registerCommands(event.getServer().getCommands().getDispatcher());
-            commandsRegistered = true;
-            LOGGER.info("Registered /playtime command during server starting");
-        } else if (!areDependenciesReady()) {
-            LOGGER.warn("Cannot register /playtime command: Dependencies not fully initialized (ConfigManager: {}, DailyPlaytimeTracker: {})",
-                    StatsCore.getConfigManager() != null ? "present" : "null",
-                    StatsCore.getDailyStatsTracker() != null ? "present" : "null");
+            LOGGER.info("Registered /playtime command during server startup");
         } else {
-            LOGGER.info("Skipping /playtime command registration; already registered");
+            LOGGER.warn("Cannot register /playtime command: Dependencies not fully initialized (ConfigManager: {})",
+                    StatsCore.getConfigManager() != null ? "present" : "null");
         }
+
+        statsTracker = new StatsTracker(
+                server,
+                "minecraft:custom",
+                "play_time",
+                Stats.CUSTOM.get(Stats.PLAY_TIME)
+        );
+
+        dailyStatsTracker = new DailyStatsTracker(
+                "daily_playtimes",
+                "last_known_playtimes",
+                "playtime_daily.json",
+                72000.0,
+                statsTracker,
+                Stats.CUSTOM.get(Stats.PLAY_TIME)
+        );
+        LOGGER.info("StatsTracker & DailyStatsTracker initialized");
+
+        String resetTime = StatsCore.getConfigManager().dailyResetTime;
+        dailyStatsTracker.setDailyResetTime(resetTime);
+        StatsCore.registerDailyTracker(dailyStatsTracker);
     }
 
     private boolean areDependenciesReady() {
         return StatsCore.getConfigManager() != null &&
-                StatsCore.getDailyStatsTracker() != null &&
                 server != null;
     }
 
@@ -63,5 +83,19 @@ public class PlaytimeLeaderboard {
             LOGGER.warn("Attempted to access server before initialization");
         }
         return server;
+    }
+
+    public static StatsTracker getStatsTracker() {
+        if (statsTracker == null) {
+            LOGGER.warn("StatsTracker not initialized yet");
+        }
+        return statsTracker;
+    }
+
+    public static DailyStatsTracker getDailyStatsTracker() {
+        if (dailyStatsTracker == null) {
+            LOGGER.warn("DailyStatsTracker not initialized yet");
+        }
+        return dailyStatsTracker;
     }
 }

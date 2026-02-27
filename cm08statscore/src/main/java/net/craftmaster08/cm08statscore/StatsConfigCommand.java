@@ -1,6 +1,5 @@
 package net.craftmaster08.cm08statscore;
 
-import com.google.gson.JsonObject;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -64,8 +63,12 @@ public class StatsConfigCommand {
                                 .executes(context -> displayIntLimitAmount(context, StringArgumentType.getString(context, "player")))
                                 .then(Commands.literal("set")
                                         .then(Commands.argument("amount", IntegerArgumentType.integer(0))
-                                                .executes(context -> setIntLimitAmount(context, StringArgumentType.getString(context, "player"), IntegerArgumentType.getInteger(context, "amount")))))));
-
+                                                .executes(context -> setIntLimitAmount(context, StringArgumentType.getString(context, "player"), IntegerArgumentType.getInteger(context, "amount")))))))
+                .then(Commands.literal("cooldown")
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 300))
+                                .executes(context -> setCooldown(context, IntegerArgumentType.getInteger(context, "seconds"))))
+                        .executes(StatsConfigCommand::showCooldown)
+                );
         try {
             dispatcher.register(command);
             LOGGER.info("Successfully registered /statsconfig command");
@@ -77,14 +80,11 @@ public class StatsConfigCommand {
     private static SuggestionProvider<CommandSourceStack> onlinePlayers() {
         return (context, builder) -> {
             MinecraftServer server = context.getSource().getServer();
-            if (server != null) {
-                return SharedSuggestionProvider.suggest(
-                        server.getPlayerList().getPlayers().stream()
-                                .map(player -> player.getGameProfile().getName()),
-                        builder
-                );
-            }
-            return builder.buildFuture();
+            return SharedSuggestionProvider.suggest(
+                    server.getPlayerList().getPlayers().stream()
+                            .map(player -> player.getGameProfile().getName()),
+                    builder
+            );
         };
     }
 
@@ -106,9 +106,10 @@ public class StatsConfigCommand {
                 throw new IllegalStateException("ConfigManager not initialized");
             }
             configManager.loadConfig();
+            StatsCore.updateAllDailyResetTimes();
             source.sendSystemMessage(Component.literal("Successfully reloaded statscore_config.json")
                     .withStyle(ChatFormatting.GREEN));
-            LOGGER.info("Configuration reloaded by {}", source.getTextName());
+            LOGGER.info("StatsCore configuration reloaded");
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to reload statscore_config.json: " + e.getMessage())
@@ -128,10 +129,10 @@ public class StatsConfigCommand {
             Set<String> blacklistedPlayers = new HashSet<>(config.getBlacklistedPlayers());
             if (blacklistedPlayers.add(player)) {
                 config.blacklistedPlayers = Set.copyOf(blacklistedPlayers);
-                saveConfig(config);
+                config.saveConfig();
                 source.sendSystemMessage(Component.literal("Added " + player + " to blacklist")
                         .withStyle(ChatFormatting.GREEN));
-                LOGGER.info("{} added {} to blacklist", source.getTextName(), player);
+                LOGGER.info("Added {} to blacklist", player);
                 return 1;
             } else {
                 source.sendSystemMessage(Component.literal(player + " is already blacklisted")
@@ -141,7 +142,7 @@ public class StatsConfigCommand {
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to add " + player + " to blacklist: " + e.getMessage())
                     .withStyle(ChatFormatting.RED));
-            LOGGER.error("Failed to blacklist add {}", player, e);
+            LOGGER.error("Failed to add {} to blacklist", player, e);
             return 0;
         }
     }
@@ -162,7 +163,6 @@ public class StatsConfigCommand {
                 source.sendSystemMessage(Component.literal("Blacklisted players: " + players)
                         .withStyle(ChatFormatting.WHITE));
             }
-            LOGGER.info("{} listed blacklist", source.getTextName());
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to list blacklist: " + e.getMessage())
@@ -182,10 +182,10 @@ public class StatsConfigCommand {
             Set<String> blacklistedPlayers = new HashSet<>(config.getBlacklistedPlayers());
             if (blacklistedPlayers.remove(player)) {
                 config.blacklistedPlayers = Set.copyOf(blacklistedPlayers);
-                saveConfig(config);
+                config.saveConfig();
                 source.sendSystemMessage(Component.literal("Removed " + player + " from blacklist")
                         .withStyle(ChatFormatting.GREEN));
-                LOGGER.info("{} removed {} from blacklist", source.getTextName(), player);
+                LOGGER.info("Removed {} from blacklist", player);
                 return 1;
             } else {
                 source.sendSystemMessage(Component.literal(player + " is not blacklisted")
@@ -210,7 +210,6 @@ public class StatsConfigCommand {
             ChatFormatting color = config.getUsernameColors().getOrDefault(player, ChatFormatting.WHITE);
             source.sendSystemMessage(Component.literal(player + "'s color: " + color.getName().toUpperCase())
                     .withStyle(color));
-            LOGGER.info("{} viewed color for {}", source.getTextName(), player);
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to show color for " + player + ": " + e.getMessage())
@@ -236,10 +235,10 @@ public class StatsConfigCommand {
             Map<String, ChatFormatting> usernameColors = new HashMap<>(config.getUsernameColors());
             usernameColors.put(player, color);
             config.usernameColors = Map.copyOf(usernameColors);
-            saveConfig(config);
+            config.saveConfig();
             source.sendSystemMessage(Component.literal("Set " + player + "'s color to " + color.getName().toUpperCase())
                     .withStyle(color));
-            LOGGER.info("{} set {}'s color to {}", source.getTextName(), player, color.getName());
+            LOGGER.info("Set {}'s color to {}", player, color.getName());
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to set color for " + player + ": " + e.getMessage())
@@ -259,10 +258,10 @@ public class StatsConfigCommand {
             Map<String, ChatFormatting> usernameColors = new HashMap<>(config.getUsernameColors());
             if (usernameColors.remove(player) != null) {
                 config.usernameColors = Map.copyOf(usernameColors);
-                saveConfig(config);
+                config.saveConfig();
                 source.sendSystemMessage(Component.literal("Reset " + player + "'s color to WHITE")
                         .withStyle(ChatFormatting.WHITE));
-                LOGGER.info("{} reset {}'s color", source.getTextName(), player);
+                LOGGER.info("Reset {}'s color", player);
                 return 1;
             } else {
                 source.sendSystemMessage(Component.literal(player + "'s color is already default")
@@ -286,7 +285,6 @@ public class StatsConfigCommand {
             }
             source.sendSystemMessage(Component.literal("Daily reset time: " + config.dailyResetTime)
                     .withStyle(ChatFormatting.WHITE));
-            LOGGER.info("{} viewed daily reset time", source.getTextName());
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to show daily reset time: " + e.getMessage())
@@ -303,54 +301,46 @@ public class StatsConfigCommand {
             if (config == null) {
                 throw new IllegalStateException("ConfigManager not initialized");
             }
-            // Validate time format (HH:mm:ss UTC)
-            String[] parts = time.split(" ");
-            if (parts.length != 1 || !parts[0].matches("^(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$")) {
-                source.sendSystemMessage(Component.literal("Invalid time format. Use HH:mm:ss")
-                        .withStyle(ChatFormatting.RED));
-                return 0;
+
+            // Validation
+            String cleaned = time.trim().replaceAll("\\s+", " ");
+            if (!cleaned.matches("^\\d{2}:\\d{2}:\\d{2}$") &&
+                    !cleaned.matches("^\\d{2}:\\d{2}:\\d{2} ?UTC$")) {
+                throw new IllegalArgumentException("Invalid format. Use HH:mm:ss or HH:mm:ss UTC (24-hour)");
             }
-            config.dailyResetTime = time;
-            if (config.dailyStatsTracker != null) {
-                config.dailyStatsTracker.setDailyResetTime(time);
+
+            // Normalize
+            String fullTime = cleaned.endsWith("UTC") || cleaned.endsWith("utc")
+                    ? cleaned.replaceAll("(?i)utc$", "UTC").trim()
+                    : cleaned + " UTC";
+
+            // range check
+            String[] parts = cleaned.split(":");
+            int h = Integer.parseInt(parts[0]);
+            int m = Integer.parseInt(parts[1]);
+            int s = Integer.parseInt(parts[2]);
+            if (h > 23 || m > 59 || s > 59) {
+                throw new IllegalArgumentException("Time values out of range (HH 0-23, mm/ss 0-59)");
             }
-            saveConfig(config);
-            source.sendSystemMessage(Component.literal("Set daily reset time to " + time + " UTC")
+
+            config.dailyResetTime = fullTime;
+            config.saveConfig();
+            StatsCore.updateAllDailyResetTimes();
+
+            source.sendSystemMessage(Component.literal("Daily reset time set to " + fullTime)
                     .withStyle(ChatFormatting.GREEN));
-            LOGGER.info("{} set daily reset time to {}", source.getTextName(), time);
+            LOGGER.info("Set daily reset time to {}", fullTime);
             return 1;
-        } catch (Exception e) {
-            source.sendSystemMessage(Component.literal("Failed to set daily reset time: " + e.getMessage())
+
+        } catch (IllegalArgumentException e) {
+            source.sendSystemMessage(Component.literal("Error: " + e.getMessage())
                     .withStyle(ChatFormatting.RED));
-            LOGGER.error("Failed to set daily reset time to {}", time, e);
             return 0;
-        }
-    }
-
-    private static void saveConfig(ConfigManager config) {
-        JsonObject configJson = new JsonObject();
-        configJson.addProperty("_comment", "DO NOT EDIT THIS FILE MANUALLY. Use /statsconfig commands to modify settings.");
-        configJson.addProperty("daily_reset_time", config.dailyResetTime);
-
-        JsonObject usernameColorsJson = new JsonObject();
-        config.getUsernameColors().forEach((username, color) ->
-                usernameColorsJson.addProperty(username, color.getName().toUpperCase()));
-        configJson.add("username_colors", usernameColorsJson);
-
-        com.google.gson.JsonArray blacklistedPlayersJson = new com.google.gson.JsonArray();
-        config.getBlacklistedPlayers().forEach(blacklistedPlayersJson::add);
-        configJson.add("blacklisted_players", blacklistedPlayersJson);
-
-        JsonObject intLimitsJson = new JsonObject();
-        config.getIntLimits().forEach(intLimitsJson::addProperty);
-        configJson.add("intlimits", intLimitsJson);
-
-        try (java.io.FileWriter writer = new java.io.FileWriter(ConfigManager.CONFIG_PATH.toFile())) {
-            new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(configJson, writer);
-            LOGGER.info("Saved statscore_config.json");
-        } catch (java.io.IOException e) {
-            LOGGER.error("Failed to save statscore_config.json", e);
-            throw new RuntimeException("Failed to save configuration", e);
+        } catch (Exception e) {
+            source.sendSystemMessage(Component.literal("Failed to set time: " + e.getMessage())
+                    .withStyle(ChatFormatting.RED));
+            LOGGER.error("Failed to set daily reset time", e);
+            return 0;
         }
     }
 
@@ -383,15 +373,48 @@ public class StatsConfigCommand {
             Map<String, Integer> intLimits = new HashMap<>(config.getIntLimits());
             intLimits.put(player, amount);
             config.intLimits = Map.copyOf(intLimits);
-            saveConfig(config);
+            config.saveConfig();
             source.sendSystemMessage(Component.literal("Set " + player + "'s intlimit count to " + amount)
                     .withStyle(ChatFormatting.GREEN));
-            LOGGER.info("{} set {}'s intlimit count to {}", source.getTextName(), player, amount);
+            LOGGER.info("Set {}'s intlimit count to {}", player, amount);
             return 1;
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed to set intlimit count for " + player + ": " + e.getMessage())
                     .withStyle(ChatFormatting.RED));
             LOGGER.error("Failed to set intlimit count for {} to {}", player, amount, e);
+            return 0;
+        }
+    }
+
+    private static int setCooldown(CommandContext<CommandSourceStack> context, int seconds) {
+        CommandSourceStack source = context.getSource();
+        try {
+            ConfigManager config = StatsCore.getConfigManager();
+            if (config == null) throw new IllegalStateException("ConfigManager not initialized");
+
+            config.cooldownSeconds = seconds;
+            config.saveConfig();
+
+            source.sendSystemMessage(Component.literal("Leaderboard cooldown set to " + seconds + " seconds")
+                    .withStyle(ChatFormatting.GREEN));
+            LOGGER.info("Set leaderboard cooldown to {} seconds", seconds);
+            return 1;
+        } catch (Exception e) {
+            source.sendSystemMessage(Component.literal("Failed: " + e.getMessage()).withStyle(ChatFormatting.RED));
+            return 0;
+        }
+    }
+
+    private static int showCooldown(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        try {
+            ConfigManager config = StatsCore.getConfigManager();
+            int cd = config.cooldownSeconds;
+            source.sendSystemMessage(Component.literal("Current leaderboard cooldown: " + cd + " seconds")
+                    .withStyle(ChatFormatting.WHITE));
+            return 1;
+        } catch (Exception e) {
+            source.sendSystemMessage(Component.literal("Failed: " + e.getMessage()).withStyle(ChatFormatting.RED));
             return 0;
         }
     }

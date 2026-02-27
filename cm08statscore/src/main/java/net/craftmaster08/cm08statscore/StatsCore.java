@@ -5,6 +5,8 @@ import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.PlayerList;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
@@ -16,13 +18,17 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.file.Path;
+import java.util.*;
+
 @Mod(StatsCore.MODID)
 public class StatsCore {
     public static final String MODID = "cm08statscore";
     private static final Logger LOGGER = LogManager.getLogger(StatsCore.class);
+    private static final Map<UUID, Long> commandCooldowns = new HashMap<>();
+    private static List<DailyStatsTracker> trackers = new ArrayList<>();
     private static ConfigManager configManager;
     private static UsernameCache usernameCache;
-    private static DailyStatsTracker dailyStatsTracker;
     private static MinecraftServer server;
 
     public StatsCore() {
@@ -36,54 +42,91 @@ public class StatsCore {
         LOGGER.info("Registered StatsCore commands");
     }
 
+    public static boolean canUseLeaderboard(UUID uuid) {
+        long cooldownMs = (configManager != null ? configManager.cooldownSeconds : 5) * 1000L;
+
+        long now = System.currentTimeMillis();
+        long last = commandCooldowns.getOrDefault(uuid, 0L);
+        if (now - last < cooldownMs) {
+            return false;
+        }
+        commandCooldowns.put(uuid, now);
+        return true;
+    }
+
     private static class EventHandler {
         @SubscribeEvent(priority = EventPriority.LOW)
         public void onServerStarting(ServerStartingEvent event) {
             server = event.getServer();
             ServiceInitializer.initialize(server);
-            LOGGER.info("StatsCore server dependencies initialized with {} username colors and {} blacklisted players",
-                    configManager.getUsernameColors().size(), configManager.getBlacklistedPlayers().size());
-        }
-
-        @SubscribeEvent
-        public void onPlayerTick(TickEvent.PlayerTickEvent event) {
-            if (event.phase == TickEvent.Phase.END && event.player instanceof ServerPlayer player) {
-                if (player.tickCount % 100 == 0 && dailyStatsTracker != null) {
-                    dailyStatsTracker.updatePlayerPlaytime(player);
-                    dailyStatsTracker.updatePlayerDistance(player);
-                }
-            }
+            LOGGER.info("StatsCore server dependencies initialized");
         }
 
         @SubscribeEvent
         public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
             if (event.getEntity() instanceof ServerPlayer player) {
-                if (dailyStatsTracker != null) {
-                    dailyStatsTracker.playerLoggedIn(player);
-                }
                 if (usernameCache != null) {
                     usernameCache.storeUsername(player.getUUID(), player.getGameProfile().getName());
+                }
+                for (DailyStatsTracker tracker : trackers) {
+                    tracker.updatePlayerStat(player);
                 }
             }
         }
 
         @SubscribeEvent
         public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-            if (event.getEntity() instanceof ServerPlayer player && dailyStatsTracker != null) {
-                dailyStatsTracker.playerLoggedOut(player);
+            commandCooldowns.entrySet().removeIf(e -> System.currentTimeMillis() - e.getValue() > 60000);
+        }
+
+        @SubscribeEvent
+        public void onServerTick(TickEvent.ServerTickEvent event) {
+            if (event.phase != TickEvent.Phase.END) return;
+
+            MinecraftServer server = event.getServer();
+            for (DailyStatsTracker tracker : trackers) {
+                tracker.getResetScheduler().checkReset();
+            }
+
+            if (server.getTickCount() % 1200 != 0) return;
+
+            for (DailyStatsTracker tracker : trackers) {
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    tracker.updatePlayerStat(player);
+                }
             }
         }
     }
 
+    public static void registerDailyTracker(DailyStatsTracker tracker) {
+        trackers.add(tracker);
+    }
+
+    public static void updateAllDailyResetTimes() {
+        ConfigManager config = getConfigManager();
+        if (config == null) return;
+        String time = config.dailyResetTime;
+        for (DailyStatsTracker tracker : trackers) {
+            tracker.setDailyResetTime(time);
+        }
+        LOGGER.info("Updated daily reset times for {} trackers", trackers.size());
+    }
+
+    public static PlayerList getPlayerList() {
+        return server.getPlayerList();
+    }
+
+    public static Path getDailyStatsPath() {
+        if (server == null) {
+            LOGGER.warn("Cannot get daily stats path: server not initialized");
+            return null;
+        }
+        return server.getWorldPath(LevelResource.ROOT).resolve("dailyStats.json");
+    }
+
     private static class ServiceInitializer {
         static void initialize(MinecraftServer server) {
-            try {
-                dailyStatsTracker = new DailyStatsTracker(server);
-            } catch (RuntimeException e) {
-                LOGGER.error("Failed to initialize DailyStatsTracker: {}", e.getMessage(), e);
-                dailyStatsTracker = null;
-            }
-            configManager = new ConfigManager(dailyStatsTracker);
+            configManager = new ConfigManager();
             usernameCache = UsernameCache.getInstance(server);
             try {
                 configManager.loadConfig();
@@ -98,12 +141,5 @@ public class StatsCore {
             LOGGER.warn("ConfigManager accessed before initialization");
         }
         return configManager;
-    }
-
-    public static DailyStatsTracker getDailyStatsTracker() {
-        if (dailyStatsTracker == null) {
-            LOGGER.warn("DailyStatsTracker accessed but is null");
-        }
-        return dailyStatsTracker;
     }
 }
