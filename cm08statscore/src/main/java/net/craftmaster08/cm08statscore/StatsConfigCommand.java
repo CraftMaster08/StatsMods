@@ -106,6 +106,7 @@ public class StatsConfigCommand {
                 throw new IllegalStateException("ConfigManager not initialized");
             }
             configManager.loadConfig();
+            StatsCore.updateAllDailyResetTimes();
             source.sendSystemMessage(Component.literal("Successfully reloaded statscore_config.json")
                     .withStyle(ChatFormatting.GREEN));
             LOGGER.info("StatsCore configuration reloaded");
@@ -324,6 +325,7 @@ public class StatsConfigCommand {
 
             config.dailyResetTime = fullTime;
             config.saveConfig();
+            StatsCore.updateAllDailyResetTimes();
 
             source.sendSystemMessage(Component.literal("Daily reset time set to " + fullTime)
                     .withStyle(ChatFormatting.GREEN));

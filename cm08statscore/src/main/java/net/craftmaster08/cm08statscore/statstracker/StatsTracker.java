@@ -135,9 +135,7 @@ public class StatsTracker {
                     return player.getStats().getValue(liveStatOverride);
                 }
                 ResourceLocation rl = ResourceLocation.fromNamespaceAndPath("minecraft", resourceLocation);
-                LOGGER.info("[LIVE] Attempting stat lookup for key: {}", rl);
                 Stat<ResourceLocation> stat = Stats.CUSTOM.get(rl);
-                LOGGER.info("[LIVE] Stat<ResLoc> is {}", stat);
                 return player.getStats().getValue(stat);
             }
 
@@ -152,7 +150,6 @@ public class StatsTracker {
                 long total = 0;
                 for (String loc : resourceLocations) {
                     ResourceLocation rl = ResourceLocation.fromNamespaceAndPath("minecraft", loc);
-                    LOGGER.info("ResourceLocation: {}", rl);
                     Stat<ResourceLocation> stat = Stats.CUSTOM.get(rl);
                     total += player.getStats().getValue(stat);
                 }

@@ -12,8 +12,6 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.nio.file.Path;
-
 @Mod(DeathLeaderboard.MODID)
 public class DeathLeaderboard {
     public static final String MODID = "deathleaderboard";
@@ -65,8 +63,10 @@ public class DeathLeaderboard {
         );
 
         dailyStatsTracker = new DailyStatsTracker(
-                Path.of("deaths_daily.json"),
                 "daily_deaths",
+                "last_known_deaths",
+                "deaths_daily.json",
+                1.0,
                 statsTracker,
                 Stats.CUSTOM.get(Stats.DEATHS)
         );
