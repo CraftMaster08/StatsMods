@@ -11,15 +11,11 @@ public class PlaytimeRunCommand {
     private static final Logger LOGGER = LogManager.getLogger(PlaytimeRunCommand.class);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("playtime")
-                .requires(source -> source.hasPermission(0))
-                .executes(context -> new LeaderboardExecutor(context.getSource(), LOGGER).execute());
+        LiteralArgumentBuilder<CommandSourceStack> cmd = Commands.literal("playtime")
+                .requires(s -> s.hasPermission(0))
+                .executes(ctx -> new LeaderboardExecutor(ctx.getSource()).execute());
 
-        try {
-            dispatcher.register(command);
-            LOGGER.info("Successfully registered /playtime command");
-        } catch (Exception e) {
-            LOGGER.error("Failed to register /playtime command", e);
-        }
+        dispatcher.register(cmd);
+        LOGGER.info("/playtime registered");
     }
 }

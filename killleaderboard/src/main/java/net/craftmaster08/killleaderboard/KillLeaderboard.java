@@ -1,101 +1,61 @@
 package net.craftmaster08.killleaderboard;
 
 import net.craftmaster08.cm08statscore.StatsCore;
+import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
-import net.craftmaster08.cm08statscore.statstracker.StatsTracker;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.stats.Stats;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import java.util.List;
 
 @Mod(KillLeaderboard.MODID)
 public class KillLeaderboard {
     public static final String MODID = "killleaderboard";
     private static final Logger LOGGER = LogManager.getLogger(KillLeaderboard.class);
-    private static MinecraftServer server;
-    private static StatsTracker statsTracker;
-    private static DailyStatsTracker dailyStatsTracker;
+
+    private static DailyStatsTracker dailyTracker;
 
     public KillLeaderboard() {
-        if (!isStatsCorePresent()) {
+        if (!ModList.get().isLoaded(StatsCore.MODID)) {
             LOGGER.error("StatsCore mod (cm08statscore) is required but not detected. Disabling KillLeaderboard.");
             return;
         }
+        // LOWEST priority guarantees StatsCore's normal-priority ServerStartingEvent
+        // listener (which loads the config) has already run by the time this fires.
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, this::onServerStarting);
-        LOGGER.info("Initialized KillLeaderboard mod");
     }
 
-    private boolean isStatsCorePresent() {
-        boolean present = net.minecraftforge.fml.ModList.get().isLoaded(StatsCore.MODID);
-        LOGGER.info("StatsCore present: {}", present);
-        return present;
-    }
-
-    private void onServerStarting(ServerStartingEvent event) {
-        server = event.getServer();
-        LOGGER.info("KillLeaderboard server set");
-
-        if (areDependenciesReady()) {
-            registerCommands(event.getServer().getCommands().getDispatcher());
-            LOGGER.info("Registered /playerkills command during server startup");
-        } else {
-            LOGGER.warn("Cannot register /playerkills command: Dependencies not fully initialized (ConfigManager: {})",
-                    StatsCore.getConfigManager() != null ? "present" : "null");
+    public void onServerStarting(ServerStartingEvent event) {
+        ConfigManager cfg = StatsCore.getConfigManager();
+        if (cfg == null) {
+            LOGGER.error("StatsCore configuration not initialized; KillLeaderboard disabled");
+            return;
         }
 
-        statsTracker = new StatsTracker(
-                server,
-                "minecraft:custom",
-                "player_kills",
-                Stats.CUSTOM.get(Stats.PLAYER_KILLS)
-        );
+        var killsStat = Stats.CUSTOM.get(Stats.PLAYER_KILLS);
 
-        dailyStatsTracker = new DailyStatsTracker(
+        dailyTracker = new DailyStatsTracker(
+                List.of(killsStat),
                 "daily_kills",
                 "last_known_kills",
-                "kills_daily.json",
                 1.0,
-                statsTracker,
-                Stats.CUSTOM.get(Stats.PLAYER_KILLS)
+                "kills_daily.json"
         );
-        LOGGER.info("StatsTracker & DailyStatsTracker initialized");
 
-        String resetTime = StatsCore.getConfigManager().dailyResetTime;
-        dailyStatsTracker.setDailyResetTime(resetTime);
-        StatsCore.registerDailyTracker(dailyStatsTracker);
+        dailyTracker.setDailyResetTime(cfg.dailyResetTime);
+        StatsCore.registerDailyTracker(dailyTracker);
+
+        KillRunCommand.register(event.getServer().getCommands().getDispatcher());
+        LOGGER.info("KillLeaderboard initialized");
     }
 
-    private boolean areDependenciesReady() {
-        return StatsCore.getConfigManager() != null &&
-                server != null;
-    }
-
-    private void registerCommands(com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> dispatcher) {
-        KillRunCommand.register(dispatcher);
-    }
-
-    public static MinecraftServer getServer() {
-        if (server == null) {
-            LOGGER.warn("Attempted to access server before initialization");
-        }
-        return server;
-    }
-
-    public static StatsTracker getStatsTracker() {
-        if (statsTracker == null) {
-            LOGGER.warn("StatsTracker not initialized yet");
-        }
-        return statsTracker;
-    }
-
-    public static DailyStatsTracker getDailyStatsTracker() {
-        if (dailyStatsTracker == null) {
-            LOGGER.warn("DailyStatsTracker not initialized yet");
-        }
-        return dailyStatsTracker;
+    public static DailyStatsTracker getDailyTracker() {
+        return dailyTracker;
     }
 }
