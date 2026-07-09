@@ -1,0 +1,58 @@
+// Shared configuration for every '<mod>/neoforge' submodule.
+// Applied from each submodule's build.gradle via: apply from: rootProject.file('gradle/neoforge.gradle')
+
+def modProps = new Properties()
+new File(project.projectDir.parentFile, 'mod.properties').withInputStream { modProps.load(it) }
+modProps.each { k, v -> project.ext[k] = v }
+
+base {
+    archivesName = "${mod_id}-neoforge"
+}
+group = "${mod_group_id}.${mod_id}"
+version = mod_version
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+
+neoForge {
+    version = neoforge_version
+
+    runs {
+        client { client() }
+        server { server(); programArgument '--nogui' }
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+dependencies {
+    implementation project(":${mod_id}:common")
+    if (project.hasProperty('extraCommonDependencies')) {
+        extraCommonDependencies.each { implementation project(":${it}:common") }
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            mod_id             : mod_id, mod_name: mod_name, mod_version: mod_version,
+            mod_description    : mod_description, mod_authors: mod_authors, mod_license: mod_license,
+            minecraft_version_range: neoforge_minecraft_version_range,
+            loader_version_range: neoforge_loader_version_range,
+            neo_version        : neoforge_version,
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

@@ -1,0 +1,8 @@
+plugins {
+    id 'java'
+    id 'eclipse'
+    id 'idea'
+    id 'net.minecraftforge.gradle' version "${forgegradle_version}"
+}
+
+apply from: rootProject.file('gradle/forge.gradle')

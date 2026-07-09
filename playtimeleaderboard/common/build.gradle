@@ -1,0 +1,8 @@
+plugins {
+    id 'java-library'
+    id 'fabric-loom' version "${fabric_loom_version}"
+}
+
+ext.extraCommonDependencies = ['cm08statscore']
+
+apply from: rootProject.file('gradle/common.gradle')

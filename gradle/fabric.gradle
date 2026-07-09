@@ -1,0 +1,58 @@
+// Shared configuration for every '<mod>/fabric' submodule.
+// Applied from each submodule's build.gradle via: apply from: rootProject.file('gradle/fabric.gradle')
+
+def modProps = new Properties()
+new File(project.projectDir.parentFile, 'mod.properties').withInputStream { modProps.load(it) }
+modProps.each { k, v -> project.ext[k] = v }
+
+base {
+    archivesName = "${mod_id}-fabric"
+}
+group = "${mod_group_id}.${mod_id}"
+version = mod_version
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+    withSourcesJar()
+}
+
+loom {
+    runs {
+        client { client() }
+        server { server() }
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+
+    implementation project(":${mod_id}:common")
+    if (project.hasProperty('extraCommonDependencies')) {
+        extraCommonDependencies.each { implementation project(":${it}:common") }
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            mod_id             : mod_id, mod_name: mod_name, mod_version: mod_version,
+            mod_description    : mod_description, mod_authors: mod_authors, mod_license: mod_license,
+            minecraft_version  : minecraft_version, java_version: java_version,
+            fabric_loader_version: fabric_loader_version,
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['fabric.mod.json']) {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

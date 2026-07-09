@@ -1,0 +1,41 @@
+// Shared configuration for every '<mod>/common' submodule.
+// Applied from each submodule's build.gradle via: apply from: rootProject.file('gradle/common.gradle')
+//
+// The common module uses Fabric Loom purely as a mapping/deobfuscation tool: it compiles against
+// vanilla Minecraft under official Mojang mappings, which is exactly what Forge and NeoForge also
+// use at the source level in 1.21.x. That means this module's compiled output is loader-agnostic
+// and can be depended on unmodified by the fabric/forge/neoforge submodules.
+
+def modProps = new Properties()
+new File(project.projectDir.parentFile, 'mod.properties').withInputStream { modProps.load(it) }
+modProps.each { k, v -> project.ext[k] = v }
+
+base {
+    archivesName = "${mod_id}-common"
+}
+group = "${mod_group_id}.${mod_id}"
+version = mod_version
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
+
+    // Addon common modules set ext.extraCommonDependencies = ['cm08statscore'] before applying
+    // this script to depend on another mod's common module (e.g. the shared library).
+    if (project.hasProperty('extraCommonDependencies')) {
+        extraCommonDependencies.each { implementation project(":${it}:common") }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

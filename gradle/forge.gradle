@@ -1,0 +1,72 @@
+// Shared configuration for every '<mod>/forge' submodule.
+// Applied from each submodule's build.gradle via: apply from: rootProject.file('gradle/forge.gradle')
+
+def modProps = new Properties()
+new File(project.projectDir.parentFile, 'mod.properties').withInputStream { modProps.load(it) }
+modProps.each { k, v -> project.ext[k] = v }
+
+base {
+    archivesName = "${mod_id}-forge"
+}
+group = "${mod_group_id}.${mod_id}"
+version = mod_version
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+
+minecraft {
+    mappings channel: 'official', version: "${minecraft_version}"
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            systemProperty 'forge.logging.console.level', 'debug'
+        }
+        register('client')
+        register('server') { args '--nogui' }
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+}
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
+    implementation project(":${mod_id}:common")
+    if (project.hasProperty('extraCommonDependencies')) {
+        extraCommonDependencies.each { implementation project(":${it}:common") }
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            mod_id                  : mod_id, mod_name: mod_name, mod_version: mod_version,
+            mod_description         : mod_description, mod_authors: mod_authors, mod_license: mod_license,
+            minecraft_version_range : minecraft_version_range,
+            loader_version_range    : forge_loader_version_range,
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+                'Specification-Title'  : mod_id,
+                'Specification-Vendor' : mod_authors,
+                'Specification-Version': '1',
+                'Implementation-Title' : mod_name,
+                'Implementation-Version': mod_version,
+                'Implementation-Vendor': mod_authors,
+        ])
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
