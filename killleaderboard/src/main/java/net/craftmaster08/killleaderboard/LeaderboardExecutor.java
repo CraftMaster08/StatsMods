@@ -4,74 +4,51 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.ranking.LeaderboardFormatter;
-import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
-import net.craftmaster08.cm08statscore.statstracker.StatsTracker;
+import net.craftmaster08.cm08statscore.ranking.RankEntry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.PlayerList;
+import net.minecraft.stats.Stats;
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 
 public class LeaderboardExecutor {
+    private static final Logger LOGGER = LogManager.getLogger(LeaderboardExecutor.class);
     private final CommandSourceStack source;
-    private final MinecraftServer server;
-    private final ConfigManager config;
-    private final DailyStatsTracker dailyStatsTracker;
-    private final StatsTracker statsTracker;
-    private final Logger LOGGER;
 
-    LeaderboardExecutor(CommandSourceStack source, Logger LOGGER) {
+    public LeaderboardExecutor(CommandSourceStack source) {
         this.source = source;
-        this.server = KillLeaderboard.getServer();
-        this.config = StatsCore.getConfigManager();
-        this.LOGGER = LOGGER;
-        this.statsTracker = KillLeaderboard.getStatsTracker();
-        this.dailyStatsTracker = KillLeaderboard.getDailyStatsTracker();
     }
 
-    int execute() {
-        if (server == null) {
-            sendError("Server not initialized");
+    public int execute() {
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (CommandSyntaxException e) {
+            source.sendSystemMessage(Component.literal("Must be run by player").withStyle(ChatFormatting.RED));
             return 0;
         }
+
+        ConfigManager config = StatsCore.getConfigManager();
         if (config == null) {
             sendError("StatsCore configuration not initialized");
             return 0;
         }
-        if (statsTracker == null) {
-            sendError("StatsTracker not initialized");
+
+        if (!StatsCore.canUseCommand(player.getUUID())) {
+            source.sendSystemMessage(Component.literal("Please wait " + config.cooldownSeconds + "s before using this command again.")
+                    .withStyle(ChatFormatting.RED));
             return 0;
         }
-        if (dailyStatsTracker == null) {
-            sendError("DailyStatsTracker unavailable; daily kills hover text disabled");
-        }
 
-        try {
-            if (!StatsCore.canUseLeaderboard(source.getPlayerOrException().getUUID())) {
-                source.sendSystemMessage(Component.literal("Please wait " + config.cooldownSeconds + "s before using this command again.")
-                        .withStyle(ChatFormatting.RED));
-                return 0;
-            }
-        } catch (CommandSyntaxException e) {
-            LOGGER.error("No player found {}", e.getMessage());
-        }
-
-        List<StatsTracker.StatsEntry> kills = fetchKills();
-        if (kills != null && !kills.isEmpty()) {
-            kills = kills.stream()
-                    .sorted((a, b) -> {
-                        int cmp = Double.compare(b.stat(), a.stat());
-                        return cmp != 0 ? cmp : a.username().compareToIgnoreCase(b.username());
-                    })
-                    .toList();
-        } else {
+        List<RankEntry> kills = StatsCore.getProvider().getLeaderboard(Stats.CUSTOM.get(Stats.PLAYER_KILLS));
+        if (kills.isEmpty()) {
             source.sendSystemMessage(Component.literal("No kills data available")
                     .withStyle(ChatFormatting.YELLOW));
             return 1;
@@ -86,32 +63,18 @@ public class LeaderboardExecutor {
         return 1;
     }
 
-    private List<StatsTracker.StatsEntry> fetchKills() {
-        try {
-            PlayerList serverPlayers = StatsCore.getPlayerList();
-            for (ServerPlayer player : serverPlayers.getPlayers()) {
-                dailyStatsTracker.updatePlayerStat(player);
-            }
-            return statsTracker.getStats();
-        } catch (Exception e) {
-            sendError("Failed to retrieve kills data: " + e.getMessage());
-            LOGGER.error("Failed to retrieve kills data", e);
-            return List.of();
-        }
-    }
-
-    private MutableComponent formatKillStat(StatsTracker.StatsEntry entry, int position) {
-        String singularPlural = entry.stat() == 1 ? "Kill" : "Kills";
+    private MutableComponent formatKillStat(RankEntry entry, int position) {
+        String singularPlural = entry.value() == 1 ? "Kill" : "Kills";
         String hoverText;
 
-        if (dailyStatsTracker != null) {
-            int dailyKills = (int) dailyStatsTracker.getDailyStat(entry.uuid());
-            hoverText = formatDailyKills(dailyKills);
+        var dailyTracker = KillLeaderboard.getDailyTracker();
+        if (dailyTracker != null) {
+            hoverText = formatDailyKills((int) dailyTracker.getDaily(entry.uuid()));
         } else {
             hoverText = "N/A";
         }
 
-        return Component.literal(String.format("%d %s", (int) entry.stat(), singularPlural))
+        return Component.literal(String.format("%d %s", entry.value(), singularPlural))
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.WHITE).withBold(false))
                 .withStyle(s -> s.withHoverEvent(
                         new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText))

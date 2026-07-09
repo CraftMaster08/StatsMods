@@ -13,7 +13,7 @@ public class DistanceRunCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("distance")
                 .requires(source -> source.hasPermission(0))
-                .executes(context -> new LeaderboardExecutor(context.getSource(), LOGGER).execute());
+                .executes(context -> new LeaderboardExecutor(context.getSource()).execute());
 
         try {
             dispatcher.register(command);

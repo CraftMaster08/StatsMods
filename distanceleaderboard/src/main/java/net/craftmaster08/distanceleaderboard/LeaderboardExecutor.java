@@ -4,73 +4,51 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.ranking.LeaderboardFormatter;
-import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
-import net.craftmaster08.cm08statscore.statstracker.StatsTracker;
+import net.craftmaster08.cm08statscore.ranking.RankEntry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.PlayerList;
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class LeaderboardExecutor {
+    private static final Logger LOGGER = LogManager.getLogger(LeaderboardExecutor.class);
     private final CommandSourceStack source;
-    private final MinecraftServer server;
-    private final ConfigManager config;
-    private final DailyStatsTracker dailyStatsTracker;
-    private final StatsTracker statsTracker;
-    private final Logger LOGGER;
 
-    public LeaderboardExecutor(CommandSourceStack source, Logger LOGGER) {
+    public LeaderboardExecutor(CommandSourceStack source) {
         this.source = source;
-        this.server = DistanceLeaderboard.getServer();
-        this.config = StatsCore.getConfigManager();
-        this.LOGGER = LOGGER;
-        this.statsTracker = DistanceLeaderboard.getStatsTracker();
-        this.dailyStatsTracker = DistanceLeaderboard.getDailyStatsTracker();
     }
 
-    int execute() {
-        if (server == null) {
-            sendError("Server not initialized");
+    public int execute() {
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (CommandSyntaxException e) {
+            source.sendSystemMessage(Component.literal("Must be run by player").withStyle(ChatFormatting.RED));
             return 0;
         }
+
+        ConfigManager config = StatsCore.getConfigManager();
         if (config == null) {
             sendError("StatsCore configuration not initialized");
             return 0;
         }
-        if (statsTracker == null) {
-            sendError("StatsTracker not initialized");
+
+        if (!StatsCore.canUseCommand(player.getUUID())) {
+            source.sendSystemMessage(Component.literal("Please wait " + config.cooldownSeconds + "s before using this command again.")
+                    .withStyle(ChatFormatting.RED));
             return 0;
         }
-        if (dailyStatsTracker == null) {
-            LOGGER.warn("DailyStatsTracker unavailable; daily distance hover text disabled");
-        }
 
-        try {
-            if (!StatsCore.canUseLeaderboard(source.getPlayerOrException().getUUID())) {
-                source.sendSystemMessage(Component.literal("Please wait " + config.cooldownSeconds + "s before using this command again.")
-                        .withStyle(ChatFormatting.RED));
-                return 0;
-            }
-        } catch (CommandSyntaxException e) {
-            LOGGER.error("No player found {}", e.getMessage());
-        }
-
-        List<StatsTracker.StatsEntry> distances = fetchDistances();
-        if (distances != null && !distances.isEmpty()) {
-            distances = distances.stream()
-                    .sorted((a, b) -> {
-                        int cmp = Double.compare(b.stat(), a.stat());
-                        return cmp != 0 ? cmp : a.username().compareToIgnoreCase(b.username());
-                    })
-                    .toList();
-        } else {
+        List<RankEntry> distances = fetchDistances(config);
+        if (distances.isEmpty()) {
             source.sendSystemMessage(Component.literal("No distance data available")
                     .withStyle(ChatFormatting.YELLOW));
             return 1;
@@ -85,42 +63,41 @@ public class LeaderboardExecutor {
         return 1;
     }
 
-    private List<StatsTracker.StatsEntry> fetchDistances() {
-        try {
-            PlayerList serverPlayers = StatsCore.getPlayerList();
-            for (ServerPlayer player : serverPlayers.getPlayers()) {
-                dailyStatsTracker.updatePlayerStat(player);
-            }
-            List<StatsTracker.StatsEntry> entries = statsTracker.getStats();
-            Map<String, Integer> intLimits = config.getIntLimits();
+    private List<RankEntry> fetchDistances(ConfigManager config) {
+        List<RankEntry> entries = StatsCore.getProvider().getLeaderboard(DistanceLeaderboard.DISTANCE_STATS);
 
-            return entries.stream()
-                    .map(e -> {
-                        Integer n = intLimits.get(e.username());
-                        if (n == null || n <= 0) return e;
-                        double extra = (long) n * 2147483647;
-                        return new StatsTracker.StatsEntry(e.username(), e.stat() + extra, e.uuid());
-                    })
-                    .toList();
-
-        } catch (Exception e) {
-            sendError("Failed to retrieve distance data: " + e.getMessage());
-            LOGGER.error("Failed to retrieve distance data", e);
-            return List.of();
+        Map<String, Integer> intLimits = config.getIntLimits();
+        if (intLimits.isEmpty()) {
+            return entries;
         }
+
+        List<RankEntry> boosted = new ArrayList<>(entries.size());
+        for (RankEntry e : entries) {
+            Integer n = intLimits.get(e.username());
+            long value = (n == null || n <= 0) ? e.value() : e.value() + (long) n * 2147483647L;
+            boosted.add(new RankEntry(e.uuid(), e.username(), value, e.rank()));
+        }
+
+        boosted.sort((a, b) -> {
+            int cmp = Long.compare(b.value(), a.value());
+            return cmp != 0 ? cmp : a.username().compareToIgnoreCase(b.username());
+        });
+
+        List<RankEntry> ranked = new ArrayList<>(boosted.size());
+        for (int i = 0; i < boosted.size(); i++) {
+            RankEntry e = boosted.get(i);
+            ranked.add(new RankEntry(e.uuid(), e.username(), e.value(), i + 1));
+        }
+        return ranked;
     }
 
-    private MutableComponent formatDistanceStat(StatsTracker.StatsEntry entry, int position) {
-        String hoverText;
+    private MutableComponent formatDistanceStat(RankEntry entry, int position) {
+        var dailyTracker = DistanceLeaderboard.getDailyTracker();
+        String hoverText = dailyTracker != null
+                ? formatDailyDistance(dailyTracker.getDaily(entry.uuid()))
+                : "N/A";
 
-        if (dailyStatsTracker != null) {
-            double dailyDistanceCm = dailyStatsTracker.getDailyStat(entry.uuid());
-            hoverText = formatDailyDistance(dailyDistanceCm);
-        } else {
-            hoverText = "N/A";
-        }
-
-        double distanceKM = entry.stat() / 100000;
+        double distanceKM = entry.value() / 100000.0;
 
         return Component.literal(formatDistance(distanceKM))
                 .withStyle(ChatFormatting.WHITE)

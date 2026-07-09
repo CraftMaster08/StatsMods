@@ -1,4 +1,4 @@
-package net.craftmaster08.cm08statscore;
+package net.craftmaster08.cm08statscore.commands;
 
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
@@ -10,6 +10,6 @@ public class CommandRegistry {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         StatsConfigCommand.register(dispatcher);
-        //LOGGER.info("Registered /statsconfig command");
+        LOGGER.info("Registered /statsconfig command");
     }
 }

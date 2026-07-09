@@ -1,11 +1,15 @@
 package net.craftmaster08.cm08statscore.data;
 
-import com.google.gson.*;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import net.craftmaster08.cm08statscore.statstracker.ResetScheduler;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.*;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Map;
@@ -16,9 +20,8 @@ public class DataSerializer {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static JsonObject loadJson(Path path) {
-        File f = path.toFile();
-        if (!f.exists()) return null;
-        try (FileReader r = new FileReader(f)) {
+        if (!path.toFile().exists()) return null;
+        try (FileReader r = new FileReader(path.toFile())) {
             return GSON.fromJson(r, JsonObject.class);
         } catch (Exception e) {
             LOGGER.error("Failed to read {}", path.getFileName(), e);
@@ -42,85 +45,66 @@ public class DataSerializer {
         boolean legacy = false;
         Instant migratedReset = null;
 
-        if (!dataJson.has(dailyKey) && oldFileName != null && !oldFileName.isEmpty()) {
+        if (oldFileName != null) {
             Path oldPath = sharedPath.getParent().resolve(oldFileName);
-            JsonObject oldJson = loadJson(oldPath);
-            if (oldJson != null && oldJson.has(dailyKey)) {
-                JsonObject dj = oldJson.getAsJsonObject(dailyKey);
-                for (var e : dj.entrySet()) {
-                    try {
-                        dailyStats.put(UUID.fromString(e.getKey()), e.getValue().getAsDouble());
-                    } catch (Exception ignored) {}
+            JsonObject oldData = loadJson(oldPath);
+            if (oldData != null) {
+                JsonObject dailyJ = oldData.getAsJsonObject(dailyKey);
+                if (dailyJ != null) {
+                    dailyJ.entrySet().forEach(e -> {
+                        try {
+                            UUID u = UUID.fromString(e.getKey());
+                            double v = e.getValue().getAsDouble();
+                            dailyStats.put(u, v);
+                        } catch (Exception ex) {
+                            LOGGER.warn("Invalid entry in old file: {}", e.getKey());
+                        }
+                    });
+                    migrated = true;
+                    migratedReset = Instant.now();
+                    oldPath.toFile().delete();
+                    LOGGER.info("Migrated old {} to dailyStats.json", oldFileName);
                 }
-                if (oldJson.has("last_reset_check")) {
-                    try {
-                        migratedReset = Instant.parse(oldJson.get("last_reset_check").getAsString());
-                    } catch (Exception e) {
-                        LOGGER.warn("Invalid last_reset_check in old file");
-                    }
-                }
-                LOGGER.info("Migrated {} from old file {}", dailyKey, oldFileName);
-                File oldFile = oldPath.toFile();
-                if (oldFile.delete()) {
-                    LOGGER.info("Deleted old file {}", oldFileName);
-                } else {
-                    LOGGER.warn("Failed to delete old file {}", oldFileName);
-                }
-                migrated = true;
-                legacy = true;
             }
         }
 
-        if (dataJson.has(dailyKey)) {
-            JsonObject dj = dataJson.getAsJsonObject(dailyKey);
-            for (var e : dj.entrySet()) {
+        JsonObject dailyJ = dataJson.getAsJsonObject(dailyKey);
+        if (dailyJ != null) {
+            dailyJ.entrySet().forEach(e -> {
                 try {
-                    dailyStats.put(UUID.fromString(e.getKey()), e.getValue().getAsDouble());
-                } catch (Exception ignored) {}
-            }
+                    UUID u = UUID.fromString(e.getKey());
+                    double v = e.getValue().getAsDouble();
+                    dailyStats.put(u, v);
+                } catch (Exception ex) {
+                    LOGGER.warn("Invalid daily entry: {}", e.getKey());
+                }
+            });
         }
-        if (dataJson.has(lastKnownKey)) {
-            JsonObject lk = dataJson.getAsJsonObject(lastKnownKey);
-            for (var e : lk.entrySet()) {
+
+        JsonObject lkJ = dataJson.getAsJsonObject(lastKnownKey);
+        if (lkJ != null) {
+            lkJ.entrySet().forEach(e -> {
                 try {
-                    statLastKnownValue.put(UUID.fromString(e.getKey()), e.getValue().getAsLong());
-                } catch (Exception ignored) {}
-            }
+                    UUID u = UUID.fromString(e.getKey());
+                    long v = e.getValue().getAsLong();
+                    statLastKnownValue.put(u, v);
+                } catch (Exception ex) {
+                    LOGGER.warn("Invalid last known entry: {}", e.getKey());
+                }
+            });
         }
 
         if (dataJson.has("last_reset_check")) {
-            try {
-                resetScheduler.setLastResetCheck(Instant.parse(dataJson.get("last_reset_check").getAsString()));
-            } catch (Exception e) {
-                LOGGER.warn("Invalid last_reset_check");
-                resetScheduler.setLastResetCheck(Instant.now());
-            }
+            String lastResetStr = dataJson.get("last_reset_check").getAsString();
+            resetScheduler.setLastResetCheck(Instant.parse(lastResetStr));
+        } else if (migrated) {
+            resetScheduler.setLastResetCheck(migratedReset);
         } else {
             resetScheduler.setLastResetCheck(Instant.now());
         }
 
         if (migrated) {
-            if (migratedReset != null && !dataJson.has("last_reset_check")) {
-                resetScheduler.setLastResetCheck(migratedReset);
-            }
-            // Add migrated data to dataJson
-            JsonObject dailyJ = new JsonObject();
-            dailyStats.forEach((u, v) -> dailyJ.addProperty(u.toString(), v));
-            dataJson.add(dailyKey, dailyJ);
-
-            JsonObject lkJ = new JsonObject();
-            statLastKnownValue.forEach((u, v) -> lkJ.addProperty(u.toString(), v));
-            dataJson.add(lastKnownKey, lkJ);
-
-            dataJson.addProperty("last_reset_check", resetScheduler.getLastResetCheck().toString());
-
-            // Save updated dataJson
-            try (FileWriter w = new FileWriter(sharedPath.toFile())) {
-                GSON.toJson(dataJson, w);
-                LOGGER.info("Saved dailyStats.json after migration for {}", dailyKey);
-            } catch (IOException e) {
-                LOGGER.error("Failed to save dailyStats.json after migration", e);
-            }
+            save(sharedPath, dailyKey, lastKnownKey, dailyStats, resetScheduler.getLastResetCheck(), statLastKnownValue);
         }
 
         if (!migrated) {

@@ -7,7 +7,10 @@ import net.minecraft.server.MinecraftServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,10 +25,10 @@ public class UsernameCache {
         private static volatile UsernameCache INSTANCE;
     }
 
-    private final File cacheFile;
-    private final Map<UUID, String> usernameMap;
-    private final Gson gson;
-    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private File cacheFile;
+    private Map<UUID, String> usernameMap;
+    private Gson gson;
+    private ReadWriteLock lock = new ReentrantReadWriteLock();
 
     private UsernameCache(MinecraftServer server) {
         if (server == null) {
