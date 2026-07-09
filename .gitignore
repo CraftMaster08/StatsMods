@@ -28,3 +28,16 @@ replay_pid*
 *.iws
 *.iml
 *.ipr
+
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Minecraft dev run directories
+run/
+**/run/
+
+# Generated mod resources (per-loader templated metadata)
+**/src/generated/

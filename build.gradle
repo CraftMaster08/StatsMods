@@ -3,6 +3,6 @@ plugins {
 }
 
 wrapper {
-    gradleVersion = '8.12'
-    distributionType = 'ALL'
+    gradleVersion = '9.5.1'
+    distributionType = Wrapper.DistributionType.BIN
 }
