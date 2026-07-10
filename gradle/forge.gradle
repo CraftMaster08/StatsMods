@@ -5,11 +5,18 @@ def modProps = new Properties()
 new File(project.projectDir.parentFile, 'mod.properties').withInputStream { modProps.load(it) }
 modProps.each { k, v -> project.ext[k] = v }
 
+def extraCommonDeps = project.hasProperty('extra_common_dependencies')
+        ? extra_common_dependencies.split(',').collect { it.trim() }
+        : []
+
 base {
     archivesName = "${mod_id}-forge"
 }
 group = "${mod_group_id}.${mod_id}"
-version = mod_version
+// The +<mc version> suffix only affects the jar filename/reported build version (matches the
+// convention Fabric API itself uses, e.g. 0.116.13+1.21.1) -- the mod's own declared version in
+// mods.toml stays the plain mod_version.
+version = "${mod_version}+${minecraft_version}"
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
 
@@ -36,10 +43,23 @@ repositories {
 dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
     implementation project(":${mod_id}:common")
-    if (project.hasProperty('extraCommonDependencies')) {
-        extraCommonDependencies.each { implementation project(":${it}:common") }
-    }
 }
+
+// NOTE: extraCommonDeps mods (e.g. cm08statscore) are intentionally NOT auto-loaded into this
+// mod's own runClient. Forge's dev-mode mod file scanner treats a cross-project classes-dir and
+// resources-dir as two disconnected "mod file" candidates when added directly to the classpath
+// (unlike NeoForge's ModDevGradle, which has an explicit, supported mechanism for this), producing
+// unreliable "has mods that were not found" failures -- for the SAME reason, this module doesn't
+// use the compileOnly-plus-manual-runtimeClasspath trick for its own :common either, since that
+// alone was enough to confuse Forge's scanner about this mod's own files too. A plain
+// `implementation` dependency (above) is safe here precisely because Forge is never asked to
+// cross-project-load another mod's classes via extraCommonDeps, so there's no risk of the
+// duplicate-package conflict that trick exists to avoid elsewhere (see fabric.gradle/
+// neoforge.gradle). This module's own common classes are still reachable at runtime, so
+// PlatformHelper.isModLoaded(...) checks work correctly and an addon just gracefully soft-disables
+// itself if cm08statscore isn't present, exactly as it would with cm08statscore genuinely absent.
+// To test the whole pack together, build all jars and install them in a real instance -- see the
+// README's "Building & running" section.
 
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
@@ -54,7 +74,13 @@ tasks.named('processResources', ProcessResources).configure {
     }
 }
 
+// Bundle this mod's own common module classes into the mod jar so it's a self-contained,
+// runnable mod (the common module itself has no mods.toml and isn't a valid mod on its own).
+// Does NOT bundle other mods' common modules (e.g. cm08statscore) pulled in via
+// extraCommonDependencies -- those stay separate runtime dependencies, provided by that mod's
+// own jar, to avoid duplicate-class conflicts when both are installed.
 tasks.named('jar', Jar).configure {
+    from(project(":${mod_id}:common").sourceSets.main.output)
     manifest {
         attributes([
                 'Specification-Title'  : mod_id,

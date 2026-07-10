@@ -5,39 +5,77 @@ def modProps = new Properties()
 new File(project.projectDir.parentFile, 'mod.properties').withInputStream { modProps.load(it) }
 modProps.each { k, v -> project.ext[k] = v }
 
+def extraCommonDeps = project.hasProperty('extra_common_dependencies')
+        ? extra_common_dependencies.split(',').collect { it.trim() }
+        : []
+
 base {
     archivesName = "${mod_id}-neoforge"
 }
 group = "${mod_group_id}.${mod_id}"
-version = mod_version
+// The +<mc version> suffix only affects the jar filename/reported build version (matches the
+// convention Fabric API itself uses, e.g. 0.116.13+1.21.1) -- the mod's own declared version in
+// neoforge.mods.toml stays the plain mod_version.
+version = "${mod_version}+${minecraft_version}"
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
 
 neoForge {
     version = neoforge_version
 
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+            // The common module's classes must be listed explicitly too, or the dev-run
+            // classloader won't find them (ClassNotFoundException on the mod's own common classes).
+            sourceSet(project(":${mod_id}:common").sourceSets.main)
+        }
+    }
+
+    // Also load any mod(s) this one soft/hard-depends on (e.g. cm08statscore) in the dev run, as
+    // their own mod entry -- including their neoforge sourceSet so that mod's own bootstrap
+    // actually runs too, matching how it behaves with both mods really installed. Uses the
+    // explicit NamedDomainObjectContainer API (not the "name { ... }" sugar) since the mod id
+    // isn't a literal. Must happen before runs {} below so loadedMods' default picks it up.
+    extraCommonDeps.each { dep ->
+        mods.create(dep) {
+            sourceSet(project(":${dep}:common").sourceSets.main)
+            sourceSet(project(":${dep}:neoforge").sourceSets.main)
+        }
+    }
+
     runs {
-        client { client() }
-        server { server(); programArgument '--nogui' }
+        client {
+            client()
+            loadedMods = mods.toList()
+        }
+        server {
+            server()
+            programArgument '--nogui'
+            loadedMods = mods.toList()
+        }
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.DEBUG
         }
     }
-
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
-        }
-    }
 }
 
 dependencies {
-    implementation project(":${mod_id}:common")
-    if (project.hasProperty('extraCommonDependencies')) {
-        extraCommonDependencies.each { implementation project(":${it}:common") }
-    }
+    // compileOnly (not implementation): this module's classes are bundled into our own jar below
+    // via jar{from(...)}, and both this module's and each extraCommonDeps mod's common sourceSet
+    // are already registered directly against the neoForge.mods {} container above (bypassing the
+    // dependency graph). Using implementation here would ALSO expose :common as a separate,
+    // transitively-resolved dependency artifact to anything that depends on this neoforge module.
+    compileOnly project(":${mod_id}:common")
+    extraCommonDeps.each { compileOnly project(":${it}:common") }
 }
+
+// Gives this module's own runClient direct runtime access to its common module's classes, without
+// going through a dependency configuration that would propagate transitively to consumers (see the
+// compileOnly comment above). extraCommonDeps' classes are already on the dev-run classpath via
+// the explicit mods {} sourceSet registration above.
+sourceSets.main.runtimeClasspath += project(":${mod_id}:common").sourceSets.main.output
 
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
@@ -51,6 +89,15 @@ tasks.named('processResources', ProcessResources).configure {
     filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
         expand replaceProperties
     }
+}
+
+// Bundle this mod's own common module classes into the mod jar so it's a self-contained,
+// runnable mod (the common module itself has no neoforge.mods.toml and isn't a valid mod on its own).
+// Does NOT bundle other mods' common modules (e.g. cm08statscore) pulled in via
+// extraCommonDependencies -- those stay separate runtime dependencies, provided by that mod's
+// own jar, to avoid duplicate-class conflicts when both are installed.
+tasks.named('jar', Jar).configure {
+    from(project(":${mod_id}:common").sourceSets.main.output)
 }
 
 tasks.withType(JavaCompile).configureEach {

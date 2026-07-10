@@ -1,57 +1,16 @@
-### Minecraft 1.21.1 — Fabric, Forge & NeoForge
+# StatsMods Minecraft 1.21.1 — Fabric, Forge & NeoForge
 
-All mods except StatPeek are server-side (not required on client). StatPeek is client-side only.
-
-This repo is a multiloader Gradle project: each mod is split into a `common` module plus one
-module per loader (`fabric`/`forge`/`neoforge`). Run `./gradlew build` to build all loader jars
-for all mods; see `.github/workflows/` for the CI pipeline that does the same on every push and
-attaches jars to a GitHub Release on version tags.
-
-## Building & running
-
-Requires **JDK 21** (`JAVA_HOME`, or your IDE's Gradle JVM, must point at a JDK 21 install).
-
-**Build every mod for every loader:**
-```
-./gradlew build
-```
-Jars land in each submodule's `build/libs/` folder, e.g. `cm08statscore/fabric/build/libs/cm08statscore-fabric-<version>.jar`.
-
-**Build one mod for one loader:**
-```
-./gradlew :cm08statscore:forge:build
-```
-
-**Launch a dev client/server for a single mod** (useful while iterating on that mod — it only
-loads that mod's own jar, not the others):
-```
-./gradlew :statpeek:fabric:runClient
-./gradlew :cm08statscore:forge:runServer
-./gradlew :playtimeleaderboard:neoforge:runClient
-```
-(swap the mod name and loader; each `<mod>/<loader>` submodule exposes `runClient`/`runServer`)
-
-**Test the whole pack together** (all 6 mods interacting): build everything with `./gradlew build`,
-then copy the jars for one loader (e.g. all `*-fabric-*.jar` files, skipping `-sources.jar`) into
-the `mods` folder of a real Fabric/Forge/NeoForge instance for MC 1.21.1 — the Gradle dev-run tasks
-above only load a single mod at a time, so cross-mod behavior (e.g. addons reading StatsCore's
-config) needs a real multi-mod instance to observe.
+### All mods are server-side (not required on client).
 
 ---
 
-# ! IMPORTANT IF YOU ARE UPDATING FROM STATSCORE v0.4.1 (or below) !
-### Daily reset time will not work!
-Just run `/statscore dailyresettime <HH:mm:ss>` once and it should be fine.
-
----
-
-## StatsCore (v0.5)
+## StatsCore (v0.6)
 
 Library Mod required for all Statistics Mods.
 All total stats are read from the normal Minecraft stats directory. Daily stats are calculated and saved in `dailyStats.json`, located in a world's directory.
 
-## Playtime Leaderboard (v0.5)
-#### (StatsCore Version 0.5)
+## Playtime Leaderboard (v0.6)
+#### (StatsCore Version 0.6)
 
 A mod for Minecraft 1.21.1 (Fabric/Forge/NeoForge) that adds a `/playtime` command to display playtime statistics for all players (online and offline) on a server or singleplayer world. The mod provides a detailed, formatted leaderboard with customizable colors, podium ranks, and alignment for an enhanced user experience.
 
@@ -79,15 +38,15 @@ A mod for Minecraft 1.21.1 (Fabric/Forge/NeoForge) that adds a `/playtime` comma
   - will be expanded in the future...
 
 
-## Distance Leaderboard (v0.3)
-#### (Statscore Version 0.5)
+## Distance Leaderboard (v0.4)
+#### (Statscore Version 0.6)
 
 Same applies here, just for distance traveled displayed in km.
 This Mod does not include a Stats Color Coding feature! (only player names, which is a feature of StatsCore)
 
 
-## Death Leaderboard (v0.2)
-#### (Statscore Version 0.5)
+## Death Leaderboard (v0.3)
+#### (Statscore Version 0.6)
 
 Same applies here, just for number of deaths per player.
 This Mod does not include a Stats Color Coding feature! (only player names, which is a feature of StatsCore)
@@ -95,8 +54,8 @@ This Mod does not include a Stats Color Coding feature! (only player names, whic
 ### Playtime/Death-Ratio
 Displays this additional Statistic next to a player's death stat.
 
-## Kill Leaderboard (v0.2)
-#### (Statscore Version 0.5)
+## Kill Leaderboard (v0.3)
+#### (Statscore Version 0.6)
 
 Same applies here, just for player (PvP) kills.
 This Mod does not include a Stats Color Coding feature! (only player names, which is a feature of StatsCore)
@@ -136,7 +95,7 @@ The configuration can be edited by using the `/statscore` command (OP is require
 ---
 
 ### Future Plans
-- improving code quality, wiring StatPeek's stats panel up to StatsCore's real API, Mod for Status (AFK, BUSY, etc.)
+- enhance some features, Mod for Status (AFK, BUSY, etc.), other Stats related Mods
 
 ### License
 - This mod is released under the [MIT License](LICENSE). Feel free to use, modify, and distribute it as per the license terms.

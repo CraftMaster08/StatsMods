@@ -5,15 +5,21 @@ def modProps = new Properties()
 new File(project.projectDir.parentFile, 'mod.properties').withInputStream { modProps.load(it) }
 modProps.each { k, v -> project.ext[k] = v }
 
+def extraCommonDeps = project.hasProperty('extra_common_dependencies')
+        ? extra_common_dependencies.split(',').collect { it.trim() }
+        : []
+
 base {
     archivesName = "${mod_id}-fabric"
 }
 group = "${mod_group_id}.${mod_id}"
-version = mod_version
+// The +<mc version> suffix only affects the jar filename/reported build version (matches the
+// convention Fabric API itself uses, e.g. 0.116.13+1.21.1) -- the mod's own declared version in
+// fabric.mod.json stays the plain mod_version.
+version = "${mod_version}+${minecraft_version}"
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
-    withSourcesJar()
 }
 
 loom {
@@ -34,10 +40,30 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
 
-    implementation project(":${mod_id}:common")
-    if (project.hasProperty('extraCommonDependencies')) {
-        extraCommonDependencies.each { implementation project(":${it}:common") }
-    }
+    // compileOnly (not implementation): this module's classes are bundled into our own jar below
+    // via jar{from(...)}, and the common sourceSet output is added straight to our runtime
+    // classpath below too. Using implementation here would ALSO expose :common as a separate,
+    // transitively-resolved dependency artifact to anything that depends on this fabric module
+    // (e.g. an addon pulling in cm08statscore via extraCommonDeps below) -- landing both the
+    // bundled copy AND the separate transitive copy on the same classpath, which Fabric/Forge
+    // reject as duplicate classes.
+    compileOnly project(":${mod_id}:common")
+}
+
+// Gives this module's own runClient/tests direct runtime access to its common module's classes,
+// without going through a dependency configuration that would propagate transitively to consumers
+// (see the compileOnly comment above).
+sourceSets.main.runtimeClasspath += project(":${mod_id}:common").sourceSets.main.output
+
+// Also put any mod(s) this one soft/hard-depends on (e.g. cm08statscore) on the dev-run classpath,
+// as raw sourceSet output (classes + resources dirs) rather than a modImplementation/modRuntimeOnly
+// project dependency on its packaged jar. The latter forces Fabric Loom to read that jar's contents
+// during THIS project's *configuration* phase, which fails on a from-scratch build where the other
+// mod's jar task hasn't run yet (Gradle configures every project before executing any tasks) --
+// this raw-output form instead goes through Gradle's normal lazy task-output wiring.
+extraCommonDeps.each { dep ->
+    sourceSets.main.runtimeClasspath += project(":${dep}:common").sourceSets.main.output
+    sourceSets.main.runtimeClasspath += project(":${dep}:fabric").sourceSets.main.output
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -51,6 +77,15 @@ tasks.named('processResources', ProcessResources).configure {
     filesMatching(['fabric.mod.json']) {
         expand replaceProperties
     }
+}
+
+// Bundle this mod's own common module classes into the mod jar so it's a self-contained,
+// runnable mod (the common module itself has no fabric.mod.json and isn't a valid mod on its own).
+// Does NOT bundle other mods' common modules (e.g. cm08statscore) pulled in via
+// extraCommonDependencies -- those stay separate runtime dependencies, provided by that mod's
+// own jar, to avoid duplicate-class conflicts when both are installed.
+tasks.named('jar', Jar).configure {
+    from(project(":${mod_id}:common").sourceSets.main.output)
 }
 
 tasks.withType(JavaCompile).configureEach {

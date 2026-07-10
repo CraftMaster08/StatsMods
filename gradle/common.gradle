@@ -10,15 +10,23 @@ def modProps = new Properties()
 new File(project.projectDir.parentFile, 'mod.properties').withInputStream { modProps.load(it) }
 modProps.each { k, v -> project.ext[k] = v }
 
+// Addon mods set extra_common_dependencies=cm08statscore in their own mod.properties to depend
+// on another mod's common module (e.g. the shared library). Comma-separated for more than one.
+def extraCommonDeps = project.hasProperty('extra_common_dependencies')
+        ? extra_common_dependencies.split(',').collect { it.trim() }
+        : []
+
 base {
     archivesName = "${mod_id}-common"
 }
 group = "${mod_group_id}.${mod_id}"
-version = mod_version
+// The +<mc version> suffix only affects the jar filename/reported build version (matches the
+// convention Fabric API itself uses, e.g. 0.116.13+1.21.1) -- the mod's own declared version in
+// its metadata (mods.toml/fabric.mod.json/neoforge.mods.toml) stays the plain mod_version.
+version = "${mod_version}+${minecraft_version}"
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
-    withSourcesJar()
 }
 
 repositories {
@@ -29,11 +37,14 @@ dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     mappings loom.officialMojangMappings()
 
-    // Addon common modules set ext.extraCommonDependencies = ['cm08statscore'] before applying
-    // this script to depend on another mod's common module (e.g. the shared library).
-    if (project.hasProperty('extraCommonDependencies')) {
-        extraCommonDependencies.each { implementation project(":${it}:common") }
-    }
+    // compileOnly, not implementation: this mod's *own* common source needs cm08statscore's
+    // classes to typecheck against, but must NOT leak them onto the runtime classpath of anything
+    // depending on this common module. At runtime, the loader-specific submodules (fabric/forge/
+    // neoforge) each pull in cm08statscore's *own* loader jar as the single authoritative source
+    // of those classes -- if this were `implementation`, both that jar AND this transitive
+    // dependency would land on the classpath together and collide (two jars claiming the same
+    // package, which Forge's module system rejects outright).
+    extraCommonDeps.each { compileOnly project(":${it}:common") }
 }
 
 tasks.withType(JavaCompile).configureEach {
