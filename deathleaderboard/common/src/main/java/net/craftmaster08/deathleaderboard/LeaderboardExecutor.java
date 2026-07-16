@@ -66,7 +66,7 @@ public class LeaderboardExecutor {
                 config.getUsernameColors()
         );
         formatter.displayLeaderboard(source, ChatFormatting.BLACK, "Deaths: ", ChatFormatting.DARK_AQUA, "/deaths", page,
-                (entry, position) -> formatDeathStat(entry, position, playtimeHours));
+                (entry, position) -> formatDeathStat(entry, position, playtimeHours), 12);
         return 1;
     }
 

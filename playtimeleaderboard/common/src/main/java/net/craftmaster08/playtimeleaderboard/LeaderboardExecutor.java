@@ -61,7 +61,7 @@ public class LeaderboardExecutor {
         formatter.displayLeaderboard(
                 source,
                 ChatFormatting.GOLD,
-                "Playtime",
+                "Playtime: ",
                 ChatFormatting.DARK_GREEN,
                 "/playtime",
                 page,

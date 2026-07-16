@@ -41,6 +41,19 @@ public class LeaderboardFormatter {
             int page,
             BiFunction<RankEntry, Integer, MutableComponent> valueFormatter
     ) {
+        displayLeaderboard(source, borderColor, title, titleColor, commandName, page, valueFormatter, 0);
+    }
+
+    public void displayLeaderboard(
+            CommandSourceStack source,
+            ChatFormatting borderColor,
+            String title,
+            ChatFormatting titleColor,
+            String commandName,
+            int page,
+            BiFunction<RankEntry, Integer, MutableComponent> valueFormatter,
+            int borderReduction
+    ) {
         List<RankEntry> filteredStats = entries.stream()
                 .filter(pt -> !blacklistedPlayers.contains(pt.username()))
                 .toList();
@@ -68,7 +81,7 @@ public class LeaderboardFormatter {
             lines.add(buildPlayerLine(entry, totalPadding, valueText, rank));
         }
 
-        int borderLength = Math.max(title.length(), maxLineLength(lines));
+        int borderLength = Math.max(title.length(), maxLineLength(lines) - borderReduction);
         MutableComponent borderComponent = Component.literal("=".repeat(borderLength))
                 .withStyle(Style.EMPTY.withColor(borderColor).withBold(true));
 
