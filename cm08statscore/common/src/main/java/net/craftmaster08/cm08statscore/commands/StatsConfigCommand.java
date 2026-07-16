@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
@@ -13,6 +14,8 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.server.level.ServerPlayer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -29,11 +32,15 @@ public class StatsConfigCommand {
             .collect(Collectors.toList());
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("statsconfig")
-                .requires(source -> source.hasPermission(2))
+        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("statscore")
+                .executes(StatsConfigCommand::showHelp)
+                .then(Commands.literal("help")
+                        .executes(StatsConfigCommand::showHelp))
                 .then(Commands.literal("reload")
+                        .requires(source -> source.hasPermission(2))
                         .executes(StatsConfigCommand::reloadConfig))
                 .then(Commands.literal("blacklist")
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("add")
                                 .then(Commands.argument("player", StringArgumentType.word())
                                         .suggests(onlinePlayers())
@@ -55,11 +62,13 @@ public class StatsConfigCommand {
                                 .then(Commands.literal("reset")
                                         .executes(c -> colorReset(c, StringArgumentType.getString(c, "player"))))))
                 .then(Commands.literal("daily_reset_time")
+                        .requires(source -> source.hasPermission(2))
                         .executes(StatsConfigCommand::dailyResetTimeShow)
                         .then(Commands.literal("set")
                                 .then(Commands.argument("time", StringArgumentType.greedyString())
                                         .executes(c -> dailyResetTimeSet(c, StringArgumentType.getString(c, "time"))))))
                 .then(Commands.literal("intlimit")
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("player", StringArgumentType.word())
                                 .suggests(onlinePlayers())
                                 .executes(c -> displayIntLimitAmount(c, StringArgumentType.getString(c, "player")))
@@ -67,12 +76,50 @@ public class StatsConfigCommand {
                                         .then(Commands.argument("amount", IntegerArgumentType.integer())
                                                 .executes(c -> setIntLimitAmount(c, StringArgumentType.getString(c, "player"), IntegerArgumentType.getInteger(c, "amount")))))))
                 .then(Commands.literal("cooldown")
+                        .requires(source -> source.hasPermission(2))
                         .executes(StatsConfigCommand::showCooldown)
                         .then(Commands.literal("set")
                                 .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
                                         .executes(c -> setCooldown(c, IntegerArgumentType.getInteger(c, "seconds"))))));
 
         dispatcher.register(command);
+    }
+
+    private static int showHelp(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        boolean isOp = source.hasPermission(2);
+
+        source.sendSystemMessage(Component.literal("===== StatsMods Help =====").withStyle(ChatFormatting.GOLD));
+
+        List<HelpEntry> leaderboards = StatsCore.getLeaderboardCommands();
+        if (!leaderboards.isEmpty()) {
+            source.sendSystemMessage(Component.literal("Leaderboards:").withStyle(ChatFormatting.YELLOW));
+            for (HelpEntry entry : leaderboards) {
+                source.sendSystemMessage(Component.literal(entry.command() + " ").withStyle(ChatFormatting.AQUA)
+                        .append(Component.literal("- " + entry.description()).withStyle(ChatFormatting.GRAY)));
+            }
+        }
+
+        source.sendSystemMessage(Component.literal("/statscore:").withStyle(ChatFormatting.YELLOW));
+        source.sendSystemMessage(helpLine("color <player> [set <color>|reset]",
+                "View a player's leaderboard name color, or change your own (OPs can change anyone's)"));
+
+        if (isOp) {
+            source.sendSystemMessage(Component.literal("Admin (/statscore):").withStyle(ChatFormatting.YELLOW));
+            source.sendSystemMessage(helpLine("blacklist <add|remove|list>", "Manage the leaderboard blacklist"));
+            source.sendSystemMessage(helpLine("daily_reset_time [set <HH:mm:ss UTC>]", "View/change the daily stats reset time"));
+            source.sendSystemMessage(helpLine("cooldown [set <seconds>]", "View/change the leaderboard command cooldown"));
+            source.sendSystemMessage(helpLine("intlimit <player> [set <amount>]", "View/adjust a player's stat overflow counter (now handled automatically for distance)"));
+            source.sendSystemMessage(helpLine("reload", "Reload statscore_config.json"));
+        }
+
+        source.sendSystemMessage(Component.literal("==========================").withStyle(ChatFormatting.GOLD));
+        return 1;
+    }
+
+    private static MutableComponent helpLine(String usage, String description) {
+        return Component.literal("/statscore " + usage + " ").withStyle(ChatFormatting.AQUA)
+                .append(Component.literal("- " + description).withStyle(ChatFormatting.GRAY));
     }
 
     private static int reloadConfig(CommandContext<CommandSourceStack> context) {
@@ -158,6 +205,10 @@ public class StatsConfigCommand {
 
     private static int colorSet(CommandContext<CommandSourceStack> context, String player, String colorName) {
         CommandSourceStack source = context.getSource();
+        if (!isSelfOrOp(source, player)) {
+            source.sendSystemMessage(Component.literal("You can only change your own color. Ask an OP to change others'.").withStyle(ChatFormatting.RED));
+            return 0;
+        }
         try {
             ChatFormatting color = ChatFormatting.getByName(colorName.toUpperCase());
             if (color == null || !color.isColor()) {
@@ -178,6 +229,10 @@ public class StatsConfigCommand {
 
     private static int colorReset(CommandContext<CommandSourceStack> context, String player) {
         CommandSourceStack source = context.getSource();
+        if (!isSelfOrOp(source, player)) {
+            source.sendSystemMessage(Component.literal("You can only change your own color. Ask an OP to change others'.").withStyle(ChatFormatting.RED));
+            return 0;
+        }
         try {
             ConfigManager config = StatsCore.getConfigManager();
             if (config.usernameColors.remove(player) != null) {
@@ -284,6 +339,16 @@ public class StatsConfigCommand {
         } catch (Exception e) {
             source.sendSystemMessage(Component.literal("Failed: " + e.getMessage()).withStyle(ChatFormatting.RED));
             return 0;
+        }
+    }
+
+    private static boolean isSelfOrOp(CommandSourceStack source, String targetPlayer) {
+        if (source.hasPermission(2)) return true;
+        try {
+            ServerPlayer player = source.getPlayerOrException();
+            return player.getGameProfile().getName().equalsIgnoreCase(targetPlayer);
+        } catch (CommandSyntaxException e) {
+            return false;
         }
     }
 

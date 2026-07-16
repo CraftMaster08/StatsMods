@@ -4,6 +4,7 @@ import net.craftmaster08.cm08statscore.StatsCore;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.platform.Services;
 import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
+import net.craftmaster08.cm08statscore.statstracker.OverflowWatcher;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.stats.Stat;
@@ -16,6 +17,10 @@ import java.util.List;
 public class DistanceLeaderboard {
     public static final String MODID = "distanceleaderboard";
     private static final Logger LOGGER = LogManager.getLogger(DistanceLeaderboard.class);
+
+    // Vanilla distance stats are stored as a 32-bit int in centimeters (max ~21,474km).
+    // Resetting a bit below that leaves ample headroom between overflow checks.
+    private static final int OVERFLOW_THRESHOLD_CM = 2_000_000_000;
 
     public static final List<Stat<ResourceLocation>> DISTANCE_STATS = List.of(
             Stats.CUSTOM.get(Stats.WALK_ONE_CM), Stats.CUSTOM.get(Stats.SPRINT_ONE_CM),
@@ -58,8 +63,10 @@ public class DistanceLeaderboard {
 
         dailyTracker.setDailyResetTime(cfg.dailyResetTime);
         StatsCore.registerDailyTracker(dailyTracker);
+        StatsCore.registerOverflowWatcher(new OverflowWatcher(DISTANCE_STATS, OVERFLOW_THRESHOLD_CM, "distance"));
 
         DistanceRunCommand.register(server.getCommands().getDispatcher());
+        StatsCore.registerLeaderboardCommand("/distance", "Shows the distance traveled leaderboard");
         LOGGER.info("DistanceLeaderboard initialized");
     }
 

@@ -49,6 +49,7 @@ public class KillLeaderboard {
         StatsCore.registerDailyTracker(dailyTracker);
 
         KillRunCommand.register(server.getCommands().getDispatcher());
+        StatsCore.registerLeaderboardCommand("/playerkills", "Shows the PVP kills leaderboard");
         LOGGER.info("KillLeaderboard initialized");
     }
 

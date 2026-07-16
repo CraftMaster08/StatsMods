@@ -10,6 +10,6 @@ public class CommandRegistry {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         StatsConfigCommand.register(dispatcher);
-        LOGGER.info("Registered /statsconfig command");
+        LOGGER.info("Registered /statscore command");
     }
 }

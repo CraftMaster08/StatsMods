@@ -1,6 +1,7 @@
 package net.craftmaster08.killleaderboard;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -13,7 +14,9 @@ public class KillRunCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal("playerkills")
                 .requires(source -> source.hasPermission(0))
-                .executes(context -> new LeaderboardExecutor(context.getSource()).execute());
+                .executes(context -> new LeaderboardExecutor(context.getSource(), 1).execute())
+                .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                        .executes(context -> new LeaderboardExecutor(context.getSource(), IntegerArgumentType.getInteger(context, "page")).execute()));
 
         try {
             dispatcher.register(command);

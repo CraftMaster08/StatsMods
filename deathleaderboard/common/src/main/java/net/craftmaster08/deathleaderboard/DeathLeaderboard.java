@@ -49,6 +49,7 @@ public class DeathLeaderboard {
         StatsCore.registerDailyTracker(dailyTracker);
 
         DeathRunCommand.register(server.getCommands().getDispatcher());
+        StatsCore.registerLeaderboardCommand("/deaths", "Shows the deaths leaderboard");
         LOGGER.info("DeathLeaderboard initialized");
     }
 

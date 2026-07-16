@@ -2,9 +2,11 @@ package net.craftmaster08.cm08statscore;
 
 import net.craftmaster08.cm08statscore.cache.UsernameCache;
 import net.craftmaster08.cm08statscore.commands.CommandRegistry;
+import net.craftmaster08.cm08statscore.commands.HelpEntry;
 import net.craftmaster08.cm08statscore.config.ConfigManager;
 import net.craftmaster08.cm08statscore.platform.Services;
 import net.craftmaster08.cm08statscore.statstracker.DailyStatsTracker;
+import net.craftmaster08.cm08statscore.statstracker.OverflowWatcher;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -24,6 +26,8 @@ public class StatsCore {
     private static UsernameCache usernameCache;
     private static MinecraftServer server;
     private static final List<DailyStatsTracker> trackers = new ArrayList<>();
+    private static final List<OverflowWatcher> overflowWatchers = new ArrayList<>();
+    private static final List<HelpEntry> leaderboardCommands = new ArrayList<>();
     private static final Map<UUID, Long> commandCooldowns = new HashMap<>();
 
     private StatsCore() {}
@@ -69,6 +73,18 @@ public class StatsCore {
         trackers.add(tracker);
     }
 
+    public static void registerOverflowWatcher(OverflowWatcher watcher) {
+        overflowWatchers.add(watcher);
+    }
+
+    public static void registerLeaderboardCommand(String command, String description) {
+        leaderboardCommands.add(new HelpEntry(command, description));
+    }
+
+    public static List<HelpEntry> getLeaderboardCommands() {
+        return leaderboardCommands;
+    }
+
     public static void updateAllDailyResetTimes() {
         if (configManager == null) return;
         String time = configManager.dailyResetTime;
@@ -87,6 +103,9 @@ public class StatsCore {
 
         if (server.getTickCount() % 200 == 0) {
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                for (OverflowWatcher w : overflowWatchers) {
+                    w.checkPlayer(p);
+                }
                 for (DailyStatsTracker t : trackers) {
                     t.updatePlayerStat(p);
                 }

@@ -50,6 +50,7 @@ public class PlaytimeLeaderboard {
         StatsCore.registerDailyTracker(dailyTracker);
 
         PlaytimeRunCommand.register(server.getCommands().getDispatcher());
+        StatsCore.registerLeaderboardCommand("/playtime", "Shows the playtime leaderboard");
         LOGGER.info("PlaytimeLeaderboard initialized");
     }
 

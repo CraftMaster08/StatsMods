@@ -2,7 +2,9 @@ package net.craftmaster08.cm08statscore.ranking;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 
@@ -14,6 +16,7 @@ import java.util.function.BiFunction;
 
 public class LeaderboardFormatter {
     private static final int PADDING_GAP = 3;
+    public static final int PAGE_SIZE = 10;
 
     private final List<RankEntry> entries;
     private final Set<String> blacklistedPlayers;
@@ -34,6 +37,8 @@ public class LeaderboardFormatter {
             ChatFormatting borderColor,
             String title,
             ChatFormatting titleColor,
+            String commandName,
+            int page,
             BiFunction<RankEntry, Integer, MutableComponent> valueFormatter
     ) {
         List<RankEntry> filteredStats = entries.stream()
@@ -46,14 +51,21 @@ public class LeaderboardFormatter {
             return;
         }
 
-        int maxUsernameLength = calculateMaxUsernameLength(filteredStats);
+        int totalPages = Math.max(1, (filteredStats.size() + PAGE_SIZE - 1) / PAGE_SIZE);
+        int clampedPage = Math.min(Math.max(page, 1), totalPages);
+        int fromIndex = (clampedPage - 1) * PAGE_SIZE;
+        int toIndex = Math.min(fromIndex + PAGE_SIZE, filteredStats.size());
+        List<RankEntry> pageEntries = filteredStats.subList(fromIndex, toIndex);
+
+        int maxUsernameLength = calculateMaxUsernameLength(pageEntries);
         int totalPadding = maxUsernameLength + PADDING_GAP;
 
-        List<MutableComponent> lines = new ArrayList<>(filteredStats.size());
-        for (int i = 0; i < filteredStats.size(); i++) {
-            RankEntry entry = filteredStats.get(i);
-            MutableComponent valueText = valueFormatter.apply(entry, i + 1);
-            lines.add(buildPlayerLine(entry, totalPadding, valueText, i + 1));
+        List<MutableComponent> lines = new ArrayList<>(pageEntries.size());
+        for (int i = 0; i < pageEntries.size(); i++) {
+            RankEntry entry = pageEntries.get(i);
+            int rank = fromIndex + i + 1;
+            MutableComponent valueText = valueFormatter.apply(entry, rank);
+            lines.add(buildPlayerLine(entry, totalPadding, valueText, rank));
         }
 
         int borderLength = Math.max(title.length(), maxLineLength(lines));
@@ -67,12 +79,35 @@ public class LeaderboardFormatter {
         for (int i = 0; i < lines.size(); i++) {
             source.sendSystemMessage(lines.get(i));
 
-            if (i == 2 && lines.size() > 3) {
+            if (clampedPage == 1 && i == 2 && lines.size() > 3) {
                 source.sendSystemMessage(Component.literal(""));
             }
         }
 
+        if (totalPages > 1) {
+            source.sendSystemMessage(buildPageControls(commandName, clampedPage, totalPages));
+        }
+
         source.sendSystemMessage(borderComponent);
+    }
+
+    private MutableComponent buildPageControls(String commandName, int page, int totalPages) {
+        MutableComponent line = Component.literal("");
+        line.append(pageArrow("<-- ", commandName, page - 1, page > 1));
+        line.append(Component.literal("Page " + page + " of " + totalPages)
+                .withStyle(Style.EMPTY.withColor(ChatFormatting.WHITE).withBold(false)));
+        line.append(pageArrow(" -->", commandName, page + 1, page < totalPages));
+        return line;
+    }
+
+    private MutableComponent pageArrow(String symbol, String commandName, int targetPage, boolean enabled) {
+        if (!enabled) {
+            return Component.literal(symbol).withStyle(Style.EMPTY.withColor(ChatFormatting.DARK_GRAY).withBold(false));
+        }
+        String runCommand = commandName + " " + targetPage;
+        return Component.literal(symbol).withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, runCommand))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to go to page " + targetPage))));
     }
 
     private int maxLineLength(List<MutableComponent> lines) {

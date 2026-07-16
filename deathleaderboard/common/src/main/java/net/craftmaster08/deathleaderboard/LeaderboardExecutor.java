@@ -14,8 +14,6 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.List;
@@ -23,11 +21,13 @@ import java.util.Map;
 import java.util.UUID;
 
 public class LeaderboardExecutor {
-    private static final Logger LOGGER = LogManager.getLogger(LeaderboardExecutor.class);
-    private final CommandSourceStack source;
 
-    public LeaderboardExecutor(CommandSourceStack source) {
+    private final CommandSourceStack source;
+    private final int page;
+
+    public LeaderboardExecutor(CommandSourceStack source, int page) {
         this.source = source;
+        this.page = page;
     }
 
     public int execute() {
@@ -65,7 +65,7 @@ public class LeaderboardExecutor {
                 config.getBlacklistedPlayers(),
                 config.getUsernameColors()
         );
-        formatter.displayLeaderboard(source, ChatFormatting.BLACK, "Deaths: ", ChatFormatting.DARK_AQUA,
+        formatter.displayLeaderboard(source, ChatFormatting.BLACK, "Deaths: ", ChatFormatting.DARK_AQUA, "/deaths", page,
                 (entry, position) -> formatDeathStat(entry, position, playtimeHours));
         return 1;
     }

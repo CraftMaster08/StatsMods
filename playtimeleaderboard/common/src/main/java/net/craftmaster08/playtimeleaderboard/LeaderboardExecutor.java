@@ -13,18 +13,16 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.server.level.ServerPlayer;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.List;
-import java.util.UUID;
 
 public class LeaderboardExecutor {
     private final CommandSourceStack source;
-    private final Logger logger = LogManager.getLogger(LeaderboardExecutor.class);
+    private final int page;
 
-    public LeaderboardExecutor(CommandSourceStack source) {
+    public LeaderboardExecutor(CommandSourceStack source, int page) {
         this.source = source;
+        this.page = page;
     }
 
     public int execute() {
@@ -65,6 +63,8 @@ public class LeaderboardExecutor {
                 ChatFormatting.GOLD,
                 "Playtime",
                 ChatFormatting.DARK_GREEN,
+                "/playtime",
+                page,
                 this::formatPlaytimeStat
         );
 

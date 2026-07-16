@@ -13,17 +13,16 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 
 public class LeaderboardExecutor {
-    private static final Logger LOGGER = LogManager.getLogger(LeaderboardExecutor.class);
     private final CommandSourceStack source;
+    private final int page;
 
-    public LeaderboardExecutor(CommandSourceStack source) {
+    public LeaderboardExecutor(CommandSourceStack source, int page) {
         this.source = source;
+        this.page = page;
     }
 
     public int execute() {
@@ -59,7 +58,7 @@ public class LeaderboardExecutor {
                 config.getBlacklistedPlayers(),
                 config.getUsernameColors()
         );
-        formatter.displayLeaderboard(source, ChatFormatting.DARK_RED, "Kills: ", ChatFormatting.YELLOW, this::formatKillStat);
+        formatter.displayLeaderboard(source, ChatFormatting.DARK_RED, "Kills: ", ChatFormatting.YELLOW, "/playerkills", page, this::formatKillStat);
         return 1;
     }
 

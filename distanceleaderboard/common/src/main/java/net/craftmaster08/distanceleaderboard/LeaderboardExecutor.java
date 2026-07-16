@@ -11,19 +11,18 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class LeaderboardExecutor {
-    private static final Logger LOGGER = LogManager.getLogger(LeaderboardExecutor.class);
     private final CommandSourceStack source;
+    private final int page;
 
-    public LeaderboardExecutor(CommandSourceStack source) {
+    public LeaderboardExecutor(CommandSourceStack source, int page) {
         this.source = source;
+        this.page = page;
     }
 
     public int execute() {
@@ -59,7 +58,7 @@ public class LeaderboardExecutor {
                 config.getBlacklistedPlayers(),
                 config.getUsernameColors()
         );
-        formatter.displayLeaderboard(source, ChatFormatting.DARK_AQUA, "Distance: ", ChatFormatting.GOLD, this::formatDistanceStat);
+        formatter.displayLeaderboard(source, ChatFormatting.DARK_AQUA, "Distance: ", ChatFormatting.GOLD, "/distance", page, this::formatDistanceStat);
         return 1;
     }
 
